@@ -89,11 +89,11 @@
 | RADIUS_UNITS | radius field `properties.radius`; unit field `properties.radius_unit` with `NM` (x 1.852 km) or `km` (x 1) |
 | EARTH_RADIUS_KM | 6371.0088 |
 | TOL_KM | 0.001 |
-| SAMPLE_TRJ | FLT-1001 |
+| SAMPLE_TRJ | FLT-1003 |
 ## 4. Schema
 - Names: tables trajectories, trajectory_points, zones (§3) plus the run and result tables below; natural keys trajectory_id, zone_id String(64) UNIQUE; integer id PK on every table except trajectory_points; FKs named <x>_pk (ingest_run_pk, trajectory_pk, zone_pk, analysis_run_pk, a_pk, b_pk). Every table has created_at UTCDateTime NOT NULL server_default CURRENT_TIMESTAMP; trajectories and zones also updated_at. Named constraints from the naming convention; CHECKs named ck_<table>_<rule>.
 - 0001 core (message "core schema"; the human runs alembic revision --autogenerate and reviews):
-  - ingest_runs: status String(16) CHECK in (running, succeeded, failed); started_at, finished_at (NULL until finished); files JSON [{path, sha256, records}]; seen, inserted, updated, unchanged, duplicates, rejected, duplicate_points Integer NOT NULL default 0 CHECK >= 0 (duplicate_points = DELTA, §5); error Text NULL; CHECK status <> 'succeeded' OR seen = inserted + updated + unchanged + duplicates + rejected.
+  - ingest_runs: status String(16) CHECK in (running, succeeded, failed); started_at, finished_at (NULL until finished); files JSON [{path, sha256, records}]; seen, inserted, updated, unchanged, duplicates, rejected Integer NOT NULL default 0 CHECK >= 0; error Text NULL; CHECK status <> 'succeeded' OR seen = inserted + updated + unchanged + duplicates + rejected.
   - ingest_rejections: ingest_run_pk FK ON DELETE CASCADE, indexed; file String(512); record_index Integer NULL; record_key String(64) NULL; reason_code String(32) CHECK in the 8 codes of §3; detail Text; payload JSON NULL (the raw record).
   - trajectories: trajectory_id, callsign, aircraft_type, origin, destination (§3); started_at, ended_at UTCDateTime NOT NULL with CHECK ended_at > started_at; point_count Integer CHECK >= 2; content_hash String(64) NOT NULL; index on started_at.
   - trajectory_points: PK (trajectory_pk FK ON DELETE CASCADE, seq Integer CHECK >= 0, 0-based in ts order); ts, lat, lon, alt_m (§3) with range CHECKs on lat and lon; UNIQUE (trajectory_pk, ts).
@@ -104,13 +104,12 @@
   - zone_passes: analysis_run_pk, trajectory_pk, zone_pk FKs (CASCADE, trajectory_pk and zone_pk indexed); entry_kind CHECK in (crossing, track_start, touch); exit_kind CHECK in (crossing, track_end, touch); entry_lat, entry_lon, entry_time, entry_alt_m and exit_lat, exit_lon, exit_time, exit_alt_m (alt NULL allowed); distance_inside_km, duration_s Float CHECK >= 0; CHECK (entry_kind = 'touch') = (exit_kind = 'touch').
   - trajectory_intersections: analysis_run_pk; a_pk, b_pk FKs to trajectories.id (CASCADE, indexed) with CHECK a_pk < b_pk; kind CHECK in (crossing, overlap_start, overlap_end); lat, lon Float; time_a, time_b UTCDateTime; time_gap_s Float CHECK >= 0.
 ## 5. Ingestion
-- Command: `gisdb ingest [PATH ...]` (default data). A PATH is a file or a directory (non-recursive, *.json by name); a record list `flights` makes trajectories, `features` makes zones. One ingest_runs row per call; the one JSON result line is {ingest_run_id, status, seen, inserted, updated, unchanged, duplicates, rejected, duplicate_points, rejected_by_code}.
+- Command: `gisdb ingest [PATH ...]` (default data). A PATH is a file or a directory (non-recursive, *.json by name); a record list `flights` makes trajectories, `features` makes zones. One ingest_runs row per call; the one JSON result line is {ingest_run_id, status, seen, inserted, updated, unchanged, duplicates, rejected}.
 - Per record (file order, record_index 0-based): validate (§3 codes) -> normalize -> sha256 -> upsert. Normalize: ts to UTC; (lat, lon) degrees; alt_m = alt_ft x 0.3048; radius_km; positions sorted by ts, exact duplicates (same instant, lat, lon, alt) collapsed to one, seq 0..n-1; started_at, ended_at, point_count derived. content_hash = sha256 hex of canonical JSON (sorted keys, no spaces, ts as ISO-8601 UTC, floats by repr) of the normalized record, ignored source keys excluded.
 - Upsert by natural key: absent -> insert (inserted); present with equal content_hash -> unchanged, no write; present with a different hash -> update the row and replace its points (updated). A rejected record never touches an existing row. Re-running the same input gives inserted 0, updated 0 and only a new ingest_runs (+ ingest_rejections) row.
 - Duplicates: same key and same hash as an earlier accepted record of this run -> duplicates + 1, event ingest.record.duplicate, skipped. Same key, different hash -> the later record is rejected duplicate_key_conflict (first wins).
 - Counters: seen counts every record visited plus one per invalid file (which also counts as rejected); when succeeded, seen = inserted + updated + unchanged + duplicates + rejected.
 - Transactions: the run row is committed first (running); loading all files and writing rejections is one transaction; then counters, finished_at and status succeeded are set. Bad files or records never fail the run (exit 0). On SQLAlchemyError or any unexpected error: roll back the load, mark the run failed with the error text, log ingest.run.failed, exit 1; bad usage exits 2.
-- DELTA: ingest_runs.duplicate_points = exact duplicate position reports collapsed inside accepted records (outside the seen-sum CHECK; also a field of ingest.run.finished and of the CLI line). Reason: the brief says to keep one copy of exact duplicates "of position reports" and to report what was skipped.
 ## 6. API
 - GET only, no prefix, JSON (other methods 405). Every response, errors included, carries X-Request-ID. Pagination: limit (int 1-500, default 50) and offset (int >= 0, default 0); envelope {items, total, limit, offset}, total = rows matching the filters.
 - GET /health -> 200 {"status": "ok"} after SELECT 1; DB failure -> 503 {"status": "unavailable"} + health.check.failed.
@@ -120,7 +119,6 @@
 - zone_passes[] item: zone_id, entry {kind, lat, lon, time, alt_m}, exit {kind, lat, lon, time, alt_m}, distance_inside_km, duration_s, ordered by entry time; passes[] item: the same with trajectory_id instead of zone_id. intersections[] item, seen from the requested trajectory: other_trajectory_id, kind, lat, lon, time, other_time, time_gap_s; ordered by time, other_trajectory_id, kind.
 - Errors: 404 {"detail": "trajectory '<id>' not found"} or "zone '<id>' not found" (also for /points); 422 FastAPI's default {"detail": [...]} for bad parameters; 500 {"detail": "Internal server error"} (logged as http.unhandled_error).
 - Times are ISO-8601 UTC with Z; numbers are served as stored (no rounding); id and *_pk never appear.
-- DELTA: trajectory detail embeds zone_passes[] and intersections[], zone detail embeds passes[]; list items carry only the scalar analysis fields. Reason: the brief wants the results "in the API's data models", and the map needs the points, not only counts.
 ## 7. Logging
 | event | level | fields |
 |---|---|---|
@@ -132,7 +130,7 @@
 | ingest.file.read | info | ingest_run_id, file, sha256, records |
 | ingest.record.rejected | warning | ingest_run_id, file, record_index, record_key, reason_code |
 | ingest.record.duplicate | info | ingest_run_id, file, record_index, record_key |
-| ingest.run.finished | info | ingest_run_id, status, seen, inserted, updated, unchanged, duplicates, rejected, duplicate_points (DELTA, §5), duration_ms |
+| ingest.run.finished | info | ingest_run_id, status, seen, inserted, updated, unchanged, duplicates, rejected, duration_ms |
 | ingest.run.failed | error | ingest_run_id, error |
 | analysis.run.started | info | analysis_run_id, trajectories, zones, algorithm_version |
 | analysis.run.finished | info | analysis_run_id, status, trajectories, zone_passes, intersections, duration_ms |
@@ -173,19 +171,21 @@
 - A3. Required: flight_id, positions (each with ts and coord); zone id, geometry, radius, radius_unit. Optional but validated when present: callsign, icao_type, origin, destination, name. Reason: the brief names only flight_id as required and callsign as optional.
 - A4. Same key twice in a run: same content = duplicate; different content keeps the first and rejects the later (duplicate_key_conflict). Reason: deterministic, no merge guessing; FLT-1004 is the sample case.
 - A5. A rejected record never changes or deletes an existing row. Reason: a bad re-export must not damage good data.
-- A6. Exact duplicate position reports collapse to one (counted in duplicate_points); the same instant with different data rejects the whole record (conflicting_points). Reason: the brief allows dropping exact duplicates only.
+- A6. Exact duplicate position reports collapse to one (not counted separately: the run reports skipped records, i.e. duplicates and rejections with reason codes; counting collapsed reports is a next step); the same instant with different data rejects the whole record (conflicting_points). Reason: the brief allows dropping exact duplicates only.
 - A7. Strict bounds: alt_ft [-2000, 100000], radius_km (0, 10000), instants 1970..2099, case-sensitive units, ICAO formats. Reason: catches sign, unit and millisecond-epoch errors; loosen in one place if the data disagrees.
 - A8. A NULL altitude stays NULL: 3D length counts that segment's altitude change as 0 and entry/exit alt_m is NULL. Reason: never invent data.
 - A9. Results are a snapshot of the last successful analyze; ingest does not clear them, so run analyze after ingest (verify.sh does); fields stay null until then. Reason: simplest consistent rule for 3 hours; staleness handling is the first next step.
 - A10. /points defaults to limit 500, other lists to 50. Reason: a map draws a whole path in one call.
 - A11. Stationary reports (equal positions at different times) are kept; a point's time is the earliest report there. Reason: keeps the data as given and the time rule deterministic.
+- A12. Last resorts, each costing a §2 requirement (taken only at its tripwire; NOTES "Known limitations" names it): cut 7 (R12 touch, R13 overlap) and cut 9 (R15 report what was skipped and why); never skip P4.2 at tripwire 87 (R3 zone endpoints). Cut 6 is not one: R10's 3-D length is a bonus. Reason: they drop stated requirements.
+- A13. The other cuts give 21 min (1: 2, 2: 2, 3: 1, 4: 4, 5: 6, 6: 1, 8: 3, 10: 2), 15 of them after minute 105 (cuts 1, 3, 4, 5, 10). Reason: the time budget, recounted without the last resorts.
 - Q1. FLT-1004 appears twice (callsign PRAC104 twice): if the copies differ, keep the first (assumed), reject both, or take the last?
 - Q2. Should a timestamp without an offset be rejected (assumed) or read as UTC?
 - Q3. May the API use the generic names (/trajectories, assumed) or should the web client see /flights?
 - Q4. Is length_3d_km = sum of sqrt(d^2 + delta_alt^2) per segment acceptable, or should arcs follow radius R + altitude?
 - Q5. Should analysis run automatically after each ingest (assumed: on demand with gisdb analyze)?
 ## 11. Status
-- [ ] Phase 0: Orient and plan
+- [x] Phase 0: Orient and plan
 - [ ] Phase 1: Project setup
 - [ ] Phase 2: Database models and migrations
 - [ ] Phase 3: JSON ingestion

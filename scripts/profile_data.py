@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-import json, sys
+import json
+import sys
 from collections import Counter
+
 
 def find_records(data):
     if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -14,16 +16,16 @@ def find_records(data):
             return data, None, {}
     return [], None, {}
 
+
 def get_paths(records, prefix="", depth=0):
     if depth > 10:
         return
-    if isinstance(records, dict) and not any(isinstance(v, dict)
-        for v in records.values()):
+    if isinstance(records, dict) and not any(isinstance(v, dict) for v in records.values()):
         for k, v in records.items():
             if not isinstance(v, dict):
                 yield (k if not prefix else f"{prefix}.{k}", [v])
         return
-    for record in (records.values() if isinstance(records, dict) else records):
+    for record in records.values() if isinstance(records, dict) else records:
         if not isinstance(record, dict):
             continue
         for k, v in record.items():
@@ -40,6 +42,7 @@ def get_paths(records, prefix="", depth=0):
             else:
                 yield path, [v]
 
+
 def analyze_path(values):
     valid = [v for v in values if v is not None]
     nulls, types = len(values) - len(valid), {}
@@ -47,19 +50,19 @@ def analyze_path(values):
         t = "int" if isinstance(v, bool) else type(v).__name__
         types[t] = types.get(t, 0) + 1
     types = ", ".join(sorted(types.keys())) or "null"
-    example = next((str(v)[:40] if isinstance(v, str) else v
-        for v in values if v is not None), "")
-    nums = [v for v in valid if isinstance(v, (int, float))
-        and not isinstance(v, bool)]
+    example = next((str(v)[:40] if isinstance(v, str) else v for v in values if v is not None), "")
+    nums = [v for v in valid if isinstance(v, (int, float)) and not isinstance(v, bool)]
     mn, mx = (min(nums), max(nums)) if nums else (None, None)
     strs = [v for v in valid if isinstance(v, str)]
     dist = len(set(strs[:1000])) if strs else None
     return types, len(values), nulls, mn, mx, dist, example
 
+
 def is_timestamp(v):
     if isinstance(v, str) and len(v) > 10 and v[:4].isdigit():
         return v[4] == "-" and v[5:7].isdigit()
     return isinstance(v, int) and v > 1e9
+
 
 def profile_file(fpath):
     try:
@@ -76,8 +79,7 @@ def profile_file(fpath):
 
     print(f"## {fpath}")
     if isinstance(records, dict):
-        n_items = sum(len(v) if isinstance(v, list) else 1
-            for v in records.values())
+        n_items = sum(len(v) if isinstance(v, list) else 1 for v in records.values())
         rec_str = f"top-level map ({len(records)} keys, {n_items} items)"
     elif key:
         rec_str = f'"{key}" (list, {len(records)} items)'
@@ -88,8 +90,10 @@ def profile_file(fpath):
     other_str = ", ".join(other_list)
     if len(other_keys) > 10:
         other_str += f", ({len(other_keys) - 10} more)"
-    print(f"- top level: object; records: {rec_str}; other keys:" +
-        (f" {other_str}" if other_str else " none"))
+    print(
+        f"- top level: object; records: {rec_str}; other keys:"
+        + (f" {other_str}" if other_str else " none")
+    )
 
     paths = {}
     for path, vals in get_paths(records):
@@ -101,8 +105,11 @@ def profile_file(fpath):
     print("|------|-------|---|-------|-----|-----|----------|---------|")
     for path in sorted(paths.keys()):
         types, n, nulls, mn, mx, dist, ex = analyze_path(paths[path])
-        m, x, d = ("" if mn is None else str(mn)), ("" if mx is None else
-            str(mx)), ("" if dist is None else str(dist))
+        m, x, d = (
+            ("" if mn is None else str(mn)),
+            ("" if mx is None else str(mx)),
+            ("" if dist is None else str(dist)),
+        )
         print(f"| {path} | {types} | {n} | {nulls} | {m} | {x} | {d} | {ex} |")
 
     repeats = []
@@ -116,8 +123,7 @@ def profile_file(fpath):
             high_distinct = distinct >= 0.9 * len(vals)
             if is_id_field or high_distinct:
                 counter = Counter(str(v) for v in vals)
-                repeats.extend(f"{path} {v} x{c}" for v, c in
-                    counter.most_common() if c > 1)
+                repeats.extend(f"{path} {v} x{c}" for v, c in counter.most_common() if c > 1)
     print(f"- repeated keys: {' '.join(repeats) if repeats else 'none'}")
 
     for path in sorted(paths.keys()):
@@ -136,13 +142,16 @@ def profile_file(fpath):
                     forms["epoch ms"] += 1
                 else:
                     forms["epoch s"] += 1
-            print(f"- timestamp forms: {path}: " +
-                " ".join(f"{k} {forms[k]}" for k in sorted(forms)))
+            print(
+                f"- timestamp forms: {path}: " + " ".join(f"{k} {forms[k]}" for k in sorted(forms))
+            )
     print()
+
 
 def main():
     for fpath in sys.argv[1:]:
         profile_file(fpath)
+
 
 if __name__ == "__main__":
     main()

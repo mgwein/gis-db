@@ -25,3 +25,7 @@ htmlcov/
 
 # Local agent helpers / session handoffs (may contain secrets) — never committed.
 .claude/
+.env
+.venv/
+__pycache__/
+*.sqlite3

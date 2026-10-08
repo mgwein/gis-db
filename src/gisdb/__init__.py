@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from gisdb!")
+"""GIS database service."""
+
+__version__ = "0.1.0"

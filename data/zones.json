@@ -1,0 +1,182 @@
+{
+  "type": "FeatureCollection",
+  "name": "airspace_zones",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "ZN-LHR",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.4543,
+          51.47
+        ]
+      },
+      "properties": {
+        "name": "London Heathrow control zone",
+        "radius": 25,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ZN-JFK",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.7781,
+          40.6413
+        ]
+      },
+      "properties": {
+        "name": "New York JFK terminal core",
+        "radius": 30,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ZN-PITUFFIK",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -68.7032,
+          76.5312
+        ]
+      },
+      "properties": {
+        "name": "Pituffik restricted area",
+        "radius": 25,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ZN-BAFFIN",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -75.12,
+          72.58
+        ]
+      },
+      "properties": {
+        "name": "Baffin Bay exercise area",
+        "radius": 60,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ZN-POLE",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0,
+          90.0
+        ]
+      },
+      "properties": {
+        "name": "North Pole advisory area",
+        "radius": 75,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ZN-DATELINE",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -179.95,
+          61.7
+        ]
+      },
+      "properties": {
+        "name": "Dateline operations area",
+        "radius": 30,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ZN-SURVEY",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -3.0,
+          51.0
+        ]
+      },
+      "properties": {
+        "name": "Bristol Channel survey block",
+        "radius": 9.26,
+        "radius_unit": "km"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "TFR-101",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -16.43381,
+          54.324716
+        ]
+      },
+      "properties": {
+        "name": "Temporary flight restriction 101",
+        "radius": 20,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "TFR-102",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -17.503759,
+          55.849211
+        ]
+      },
+      "properties": {
+        "name": "Temporary flight restriction 102",
+        "radius": 10,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "TFR-103",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -24.473649,
+          56.261999
+        ]
+      },
+      "properties": {
+        "name": "Temporary flight restriction 103",
+        "radius": 10,
+        "radius_unit": "NM"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ZN-CHANNEL",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0,
+          50.0
+        ]
+      },
+      "properties": {
+        "name": "Channel exercise area",
+        "radius": -5,
+        "radius_unit": "NM"
+      }
+    }
+  ]
+}

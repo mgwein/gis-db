@@ -1,0 +1,882 @@
+{
+  "meta": {
+    "generator": "practice/generate_sample_data.py",
+    "seed": 20240501,
+    "earth_radius_km": 6371.0088,
+    "nm_to_km": 1.852,
+    "ft_to_m": 0.3048,
+    "tol_km": 0.001,
+    "tolerances": {
+      "position_m": 1.0,
+      "time_s": 1.0,
+      "distance_m": 1.0
+    },
+    "method": "slerp sampling 0.5 km + bisection/golden-section; lengths via geographiclib Geodesic(6371008.8, 0)",
+    "rules": {
+      "touch_band_m": 1.0,
+      "shared_endpoint_is_intersection": true,
+      "overlap_direction": "overlap_start/overlap_end follow trajectory A: the first ingested (lower pk), which is also the lexicographically smaller trajectory_id; either direction is accepted"
+    }
+  },
+  "ingestion": {
+    "runs": [
+      {
+        "run": 1,
+        "paths": [
+          "data"
+        ],
+        "seen": 26,
+        "inserted": 20,
+        "updated": 0,
+        "unchanged": 0,
+        "duplicates": 1,
+        "rejected": 5
+      },
+      {
+        "run": 2,
+        "paths": [
+          "data"
+        ],
+        "seen": 26,
+        "inserted": 0,
+        "updated": 0,
+        "unchanged": 20,
+        "duplicates": 1,
+        "rejected": 5
+      },
+      {
+        "run": 3,
+        "paths": [
+          "practice/redelivery/flights.json"
+        ],
+        "seen": 10,
+        "inserted": 0,
+        "updated": 1,
+        "unchanged": 9,
+        "duplicates": 0,
+        "rejected": 0
+      }
+    ],
+    "rejections": [
+      {
+        "file": "flights.json",
+        "record_index": 10,
+        "record_key": "FLT-1011",
+        "reason_code": "too_few_points"
+      },
+      {
+        "file": "flights.json",
+        "record_index": 11,
+        "record_key": "FLT-1012",
+        "reason_code": "out_of_range"
+      },
+      {
+        "file": "flights.json",
+        "record_index": 12,
+        "record_key": "FLT-1013",
+        "reason_code": "invalid_timestamp"
+      },
+      {
+        "file": "flights.json",
+        "record_index": 13,
+        "record_key": null,
+        "reason_code": "missing_field"
+      },
+      {
+        "file": "zones.json",
+        "record_index": 10,
+        "record_key": "ZN-CHANNEL",
+        "reason_code": "out_of_range"
+      }
+    ],
+    "duplicates": [
+      {
+        "file": "flights.json",
+        "record_index": 14,
+        "record_key": "FLT-1004"
+      }
+    ]
+  },
+  "table_counts": {
+    "after_run_2": {
+      "ingest_runs": 2,
+      "ingest_rejections": 10,
+      "trajectories": 10,
+      "trajectory_points": 184,
+      "zones": 10
+    },
+    "after_analysis": {
+      "analysis_runs": 1,
+      "trajectory_metrics": 10,
+      "zone_passes": 14,
+      "trajectory_intersections": 9
+    }
+  },
+  "trajectories": {
+    "FLT-1001": {
+      "point_count": 27,
+      "started_at": "2024-05-01T09:00:00Z",
+      "ended_at": "2024-05-01T15:17:43Z",
+      "duration_s": 22663.0,
+      "length_km": 5540.01897,
+      "length_3d_km": 5549.507673,
+      "zone_pass_count": 2,
+      "intersection_count": 3
+    },
+    "FLT-1002": {
+      "point_count": 26,
+      "started_at": "2024-05-01T13:05:00Z",
+      "ended_at": "2024-05-01T19:14:20Z",
+      "duration_s": 22160.0,
+      "length_km": 5540.01897,
+      "length_3d_km": 5549.798348,
+      "zone_pass_count": 2,
+      "intersection_count": 3
+    },
+    "FLT-1003": {
+      "point_count": 16,
+      "started_at": "2024-05-01T11:00:00Z",
+      "ended_at": "2024-05-01T17:22:54Z",
+      "duration_s": 22974.0,
+      "length_km": 5424.514271,
+      "length_3d_km": null,
+      "zone_pass_count": 1,
+      "intersection_count": 1
+    },
+    "FLT-1004": {
+      "point_count": 14,
+      "started_at": "2024-05-01T06:00:00Z",
+      "ended_at": "2024-05-01T10:07:20Z",
+      "duration_s": 14840.0,
+      "length_km": 3380.402955,
+      "length_3d_km": 3385.890118,
+      "zone_pass_count": 1,
+      "intersection_count": 1
+    },
+    "FLT-1005": {
+      "point_count": 12,
+      "started_at": "2024-05-01T05:30:00Z",
+      "ended_at": "2024-05-01T08:58:57Z",
+      "duration_s": 12537.0,
+      "length_km": 2855.715224,
+      "length_3d_km": 2860.165542,
+      "zone_pass_count": 1,
+      "intersection_count": 1
+    },
+    "FLT-1006": {
+      "point_count": 8,
+      "started_at": "2024-05-01T02:00:00Z",
+      "ended_at": "2024-05-01T08:30:07Z",
+      "duration_s": 23407.0,
+      "length_km": 5656.898645,
+      "length_3d_km": 5666.47688,
+      "zone_pass_count": 1,
+      "intersection_count": 1
+    },
+    "FLT-1007": {
+      "point_count": 9,
+      "started_at": "2024-05-01T02:40:00Z",
+      "ended_at": "2024-05-01T09:45:29Z",
+      "duration_s": 25529.0,
+      "length_km": 6098.681033,
+      "length_3d_km": 6108.154507,
+      "zone_pass_count": 1,
+      "intersection_count": 2
+    },
+    "FLT-1008": {
+      "point_count": 33,
+      "started_at": "2024-05-01T10:00:00Z",
+      "ended_at": "2024-05-01T17:34:26Z",
+      "duration_s": 27266.0,
+      "length_km": 6665.159302,
+      "length_3d_km": 6676.324252,
+      "zone_pass_count": 1,
+      "intersection_count": 4
+    },
+    "FLT-1009": {
+      "point_count": 32,
+      "started_at": "2024-05-01T09:35:55Z",
+      "ended_at": "2024-05-01T16:53:23Z",
+      "duration_s": 26248.0,
+      "length_km": 6343.241244,
+      "length_3d_km": 6354.162627,
+      "zone_pass_count": 1,
+      "intersection_count": 1
+    },
+    "FLT-1010": {
+      "point_count": 7,
+      "started_at": "2024-05-01T08:00:00Z",
+      "ended_at": "2024-05-01T08:25:56Z",
+      "duration_s": 1556.0,
+      "length_km": 95.092196,
+      "length_3d_km": 95.09902,
+      "zone_pass_count": 3,
+      "intersection_count": 1
+    }
+  },
+  "zones": {
+    "ZN-LHR": {
+      "center": {
+        "lat": 51.47,
+        "lon": -0.4543
+      },
+      "radius_km": 46.3,
+      "pass_count": 2,
+      "trajectory_count": 2
+    },
+    "ZN-JFK": {
+      "center": {
+        "lat": 40.6413,
+        "lon": -73.7781
+      },
+      "radius_km": 55.56,
+      "pass_count": 2,
+      "trajectory_count": 2
+    },
+    "ZN-PITUFFIK": {
+      "center": {
+        "lat": 76.5312,
+        "lon": -68.7032
+      },
+      "radius_km": 46.3,
+      "pass_count": 1,
+      "trajectory_count": 1
+    },
+    "ZN-BAFFIN": {
+      "center": {
+        "lat": 72.58,
+        "lon": -75.12
+      },
+      "radius_km": 111.12,
+      "pass_count": 0,
+      "trajectory_count": 0
+    },
+    "ZN-POLE": {
+      "center": {
+        "lat": 90.0,
+        "lon": 0.0
+      },
+      "radius_km": 138.9,
+      "pass_count": 2,
+      "trajectory_count": 2
+    },
+    "ZN-DATELINE": {
+      "center": {
+        "lat": 61.7,
+        "lon": -179.95
+      },
+      "radius_km": 55.56,
+      "pass_count": 2,
+      "trajectory_count": 2
+    },
+    "ZN-SURVEY": {
+      "center": {
+        "lat": 51.0,
+        "lon": -3.0
+      },
+      "radius_km": 9.26,
+      "pass_count": 3,
+      "trajectory_count": 1
+    },
+    "TFR-101": {
+      "center": {
+        "lat": 54.324716,
+        "lon": -16.43381
+      },
+      "radius_km": 37.04,
+      "pass_count": 1,
+      "trajectory_count": 1
+    },
+    "TFR-102": {
+      "center": {
+        "lat": 55.849211,
+        "lon": -17.503759
+      },
+      "radius_km": 18.52,
+      "pass_count": 0,
+      "trajectory_count": 0
+    },
+    "TFR-103": {
+      "center": {
+        "lat": 56.261999,
+        "lon": -24.473649
+      },
+      "radius_km": 18.52,
+      "pass_count": 1,
+      "trajectory_count": 1
+    }
+  },
+  "zone_passes": [
+    {
+      "trajectory_id": "FLT-1001",
+      "zone_id": "ZN-JFK",
+      "seq": 1,
+      "scenario": "S2",
+      "entry": {
+        "kind": "crossing",
+        "lat": 40.952204,
+        "lon": -73.261404,
+        "time": "2024-05-01T15:13:56.423Z"
+      },
+      "exit": {
+        "kind": "track_end",
+        "lat": 40.6413,
+        "lon": -73.7781,
+        "time": "2024-05-01T15:17:43Z"
+      },
+      "distance_inside_km": 55.56,
+      "duration_s": 226.577
+    },
+    {
+      "trajectory_id": "FLT-1001",
+      "zone_id": "ZN-LHR",
+      "seq": 1,
+      "scenario": "S1",
+      "entry": {
+        "kind": "track_start",
+        "lat": 51.47,
+        "lon": -0.4543,
+        "time": "2024-05-01T09:00:00Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 51.596552,
+        "lon": -1.092003,
+        "time": "2024-05-01T09:03:09.409Z"
+      },
+      "distance_inside_km": 46.3,
+      "duration_s": 189.409
+    },
+    {
+      "trajectory_id": "FLT-1002",
+      "zone_id": "ZN-JFK",
+      "seq": 1,
+      "scenario": "S2",
+      "entry": {
+        "kind": "track_start",
+        "lat": 40.6413,
+        "lon": -73.7781,
+        "time": "2024-05-01T13:05:00Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 40.952204,
+        "lon": -73.261404,
+        "time": "2024-05-01T13:08:42.240Z"
+      },
+      "distance_inside_km": 55.56,
+      "duration_s": 222.24
+    },
+    {
+      "trajectory_id": "FLT-1002",
+      "zone_id": "ZN-LHR",
+      "seq": 1,
+      "scenario": "S2",
+      "entry": {
+        "kind": "crossing",
+        "lat": 51.596552,
+        "lon": -1.092003,
+        "time": "2024-05-01T19:11:14.825Z"
+      },
+      "exit": {
+        "kind": "track_end",
+        "lat": 51.47,
+        "lon": -0.4543,
+        "time": "2024-05-01T19:14:20Z"
+      },
+      "distance_inside_km": 46.3,
+      "duration_s": 185.175
+    },
+    {
+      "trajectory_id": "FLT-1003",
+      "zone_id": "ZN-PITUFFIK",
+      "seq": 1,
+      "scenario": "S3",
+      "entry": {
+        "kind": "crossing",
+        "lat": 76.477753,
+        "lon": -66.933657,
+        "time": "2024-05-01T13:26:53.336Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 76.698331,
+        "lon": -70.350698,
+        "time": "2024-05-01T13:33:20.722Z"
+      },
+      "distance_inside_km": 91.466229,
+      "duration_s": 387.386
+    },
+    {
+      "trajectory_id": "FLT-1004",
+      "zone_id": "ZN-POLE",
+      "seq": 1,
+      "scenario": "S5",
+      "entry": {
+        "kind": "crossing",
+        "lat": 88.750844,
+        "lon": -32.924576,
+        "time": "2024-05-01T07:29:12.181Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 88.750844,
+        "lon": -106.516496,
+        "time": "2024-05-01T07:41:22.650Z"
+      },
+      "distance_inside_km": 166.384618,
+      "duration_s": 730.469
+    },
+    {
+      "trajectory_id": "FLT-1005",
+      "zone_id": "ZN-POLE",
+      "seq": 1,
+      "scenario": "S5",
+      "entry": {
+        "kind": "crossing",
+        "lat": 88.750844,
+        "lon": -111.349546,
+        "time": "2024-05-01T06:24:45.375Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 88.750844,
+        "lon": -177.18908,
+        "time": "2024-05-01T06:35:48.152Z"
+      },
+      "distance_inside_km": 150.965896,
+      "duration_s": 662.777
+    },
+    {
+      "trajectory_id": "FLT-1006",
+      "zone_id": "ZN-DATELINE",
+      "seq": 1,
+      "scenario": "S6",
+      "entry": {
+        "kind": "crossing",
+        "lat": 61.736781,
+        "lon": -178.898277,
+        "time": "2024-05-01T03:48:26.257Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 61.319411,
+        "lon": 179.371275,
+        "time": "2024-05-01T03:55:31.629Z"
+      },
+      "distance_inside_km": 102.798115,
+      "duration_s": 425.372
+    },
+    {
+      "trajectory_id": "FLT-1007",
+      "zone_id": "ZN-DATELINE",
+      "seq": 1,
+      "scenario": "S6",
+      "entry": {
+        "kind": "crossing",
+        "lat": 61.790257,
+        "lon": -178.911862,
+        "time": "2024-05-01T04:26:18.731Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 61.596575,
+        "lon": 179.020594,
+        "time": "2024-05-01T04:34:03.877Z"
+      },
+      "distance_inside_km": 111.118326,
+      "duration_s": 465.146
+    },
+    {
+      "trajectory_id": "FLT-1008",
+      "zone_id": "TFR-101",
+      "seq": 1,
+      "scenario": "S7",
+      "entry": {
+        "kind": "touch",
+        "lat": 54.003101,
+        "lon": -16.581974,
+        "time": "2024-05-01T11:37:30Z"
+      },
+      "exit": {
+        "kind": "touch",
+        "lat": 54.003101,
+        "lon": -16.581974,
+        "time": "2024-05-01T11:37:30Z"
+      },
+      "distance_inside_km": 0.0,
+      "duration_s": 0.0
+    },
+    {
+      "trajectory_id": "FLT-1009",
+      "zone_id": "TFR-103",
+      "seq": 1,
+      "scenario": "S9",
+      "entry": {
+        "kind": "crossing",
+        "lat": 56.095529,
+        "lon": -24.483159,
+        "time": "2024-05-01T12:13:23.212Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 56.095956,
+        "lon": -24.497067,
+        "time": "2024-05-01T12:13:26.787Z"
+      },
+      "distance_inside_km": 0.863979,
+      "duration_s": 3.575
+    },
+    {
+      "trajectory_id": "FLT-1010",
+      "zone_id": "ZN-SURVEY",
+      "seq": 1,
+      "scenario": "S10",
+      "entry": {
+        "kind": "crossing",
+        "lat": 50.950123,
+        "lon": -3.105912,
+        "time": "2024-05-01T08:01:47.731Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 50.950123,
+        "lon": -2.894088,
+        "time": "2024-05-01T08:05:50.269Z"
+      },
+      "distance_inside_km": 14.838807,
+      "duration_s": 242.538
+    },
+    {
+      "trajectory_id": "FLT-1010",
+      "zone_id": "ZN-SURVEY",
+      "seq": 2,
+      "scenario": "S10",
+      "entry": {
+        "kind": "crossing",
+        "lat": 51.000076,
+        "lon": -2.867671,
+        "time": "2024-05-01T08:10:26.582Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 51.0,
+        "lon": -3.132329,
+        "time": "2024-05-01T08:15:30Z"
+      },
+      "distance_inside_km": 18.519983,
+      "duration_s": 303.417
+    },
+    {
+      "trajectory_id": "FLT-1010",
+      "zone_id": "ZN-SURVEY",
+      "seq": 3,
+      "scenario": "S10",
+      "entry": {
+        "kind": "crossing",
+        "lat": 51.050123,
+        "lon": -3.105733,
+        "time": "2024-05-01T08:20:05.936Z"
+      },
+      "exit": {
+        "kind": "crossing",
+        "lat": 51.050123,
+        "lon": -2.894267,
+        "time": "2024-05-01T08:24:08.064Z"
+      },
+      "distance_inside_km": 14.781798,
+      "duration_s": 242.128
+    }
+  ],
+  "intersections": [
+    {
+      "trajectory_ids": [
+        "FLT-1001",
+        "FLT-1002"
+      ],
+      "kind": "overlap_start",
+      "scenario": "X1",
+      "lat": 51.47,
+      "lon": -0.4543,
+      "times": {
+        "FLT-1001": "2024-05-01T09:00:00Z",
+        "FLT-1002": "2024-05-01T19:14:20Z"
+      },
+      "time_gap_s": 36860.0
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1001",
+        "FLT-1002"
+      ],
+      "kind": "overlap_end",
+      "scenario": "X1",
+      "lat": 40.6413,
+      "lon": -73.7781,
+      "times": {
+        "FLT-1001": "2024-05-01T15:17:43Z",
+        "FLT-1002": "2024-05-01T13:05:00Z"
+      },
+      "time_gap_s": 7963.0
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1001",
+        "FLT-1008"
+      ],
+      "kind": "crossing",
+      "scenario": "X5",
+      "lat": 53.132767,
+      "lon": -11.781169,
+      "times": {
+        "FLT-1001": "2024-05-01T09:53:56.516Z",
+        "FLT-1008": "2024-05-01T11:14:54.319Z"
+      },
+      "time_gap_s": 4857.802
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1002",
+        "FLT-1008"
+      ],
+      "kind": "crossing",
+      "scenario": "X5",
+      "lat": 53.132768,
+      "lon": -11.781174,
+      "times": {
+        "FLT-1002": "2024-05-01T18:21:35.481Z",
+        "FLT-1008": "2024-05-01T11:14:54.320Z"
+      },
+      "time_gap_s": 25601.161
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1003",
+        "FLT-1007"
+      ],
+      "kind": "crossing",
+      "scenario": "X6",
+      "lat": 61.1743,
+      "lon": -149.9982,
+      "times": {
+        "FLT-1003": "2024-05-01T17:22:54Z",
+        "FLT-1007": "2024-05-01T02:40:00Z"
+      },
+      "time_gap_s": 52974.0
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1004",
+        "FLT-1005"
+      ],
+      "kind": "crossing",
+      "scenario": "X3",
+      "lat": 88.712001,
+      "lon": -108.768698,
+      "times": {
+        "FLT-1004": "2024-05-01T07:41:53.502Z",
+        "FLT-1005": "2024-05-01T06:24:11.652Z"
+      },
+      "time_gap_s": 4661.85
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1006",
+        "FLT-1007"
+      ],
+      "kind": "crossing",
+      "scenario": "X4",
+      "lat": 61.822942,
+      "lon": -178.523172,
+      "times": {
+        "FLT-1006": "2024-05-01T03:46:55.526Z",
+        "FLT-1007": "2024-05-01T04:24:51.911Z"
+      },
+      "time_gap_s": 2276.385
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1008",
+        "FLT-1009"
+      ],
+      "kind": "crossing",
+      "scenario": "X2",
+      "lat": 55.0,
+      "lon": -45.0,
+      "times": {
+        "FLT-1008": "2024-05-01T13:41:58Z",
+        "FLT-1009": "2024-05-01T13:42:28Z"
+      },
+      "time_gap_s": 30.0
+    },
+    {
+      "trajectory_ids": [
+        "FLT-1008",
+        "FLT-1010"
+      ],
+      "kind": "crossing",
+      "scenario": "X7",
+      "lat": 50.950078,
+      "lon": -3.147727,
+      "times": {
+        "FLT-1008": "2024-05-01T10:31:24.721Z",
+        "FLT-1010": "2024-05-01T08:00:59.853Z"
+      },
+      "time_gap_s": 9024.867
+    }
+  ],
+  "absent": {
+    "zone_pairs": [
+      [
+        "FLT-1003",
+        "ZN-BAFFIN"
+      ],
+      [
+        "FLT-1009",
+        "TFR-102"
+      ],
+      [
+        "FLT-1008",
+        "ZN-SURVEY"
+      ]
+    ],
+    "trajectory_pairs": [
+      [
+        "FLT-1001",
+        "FLT-1009"
+      ]
+    ],
+    "statement": "every trajectory-zone pair and trajectory pair not listed in zone_passes or intersections has no rows"
+  },
+  "scenarios": [
+    {
+      "id": "D1",
+      "title": "coordinates are [lon, lat]",
+      "result": "PASS"
+    },
+    {
+      "id": "D2",
+      "title": "units: feet, nautical miles and kilometres",
+      "result": "PASS"
+    },
+    {
+      "id": "D3",
+      "title": "timestamps with Z, +02:00, -08:00 and epoch seconds",
+      "result": "PASS"
+    },
+    {
+      "id": "D4",
+      "title": "unordered positions, a repeated position and a repeated record",
+      "result": "PASS"
+    },
+    {
+      "id": "D5",
+      "title": "unknown field is ignored",
+      "result": "PASS"
+    },
+    {
+      "id": "D6",
+      "title": "null altitudes",
+      "result": "PASS"
+    },
+    {
+      "id": "D7",
+      "title": "five invalid records",
+      "result": "PASS"
+    },
+    {
+      "id": "S1",
+      "title": "start inside",
+      "result": "PASS"
+    },
+    {
+      "id": "S2",
+      "title": "end inside and start inside",
+      "result": "PASS"
+    },
+    {
+      "id": "S3",
+      "title": "great-circle bulge inside a reporting gap",
+      "result": "PASS"
+    },
+    {
+      "id": "S4",
+      "title": "zone hit only by a straight lat/lon line",
+      "result": "PASS"
+    },
+    {
+      "id": "S5",
+      "title": "polar zone",
+      "result": "PASS"
+    },
+    {
+      "id": "S6",
+      "title": "zone on the antimeridian",
+      "result": "PASS"
+    },
+    {
+      "id": "S7",
+      "title": "path touches the boundary at one point",
+      "result": "PASS"
+    },
+    {
+      "id": "S8",
+      "title": "path passes 5 m outside",
+      "result": "PASS"
+    },
+    {
+      "id": "S9",
+      "title": "path dips 5 m inside between two reports",
+      "result": "PASS"
+    },
+    {
+      "id": "S10",
+      "title": "vertex on the boundary",
+      "result": "PASS"
+    },
+    {
+      "id": "X1",
+      "title": "same route flown in opposite directions",
+      "result": "PASS"
+    },
+    {
+      "id": "X2",
+      "title": "shared waypoint passed 30 s apart",
+      "result": "PASS"
+    },
+    {
+      "id": "X3",
+      "title": "crossing near the pole",
+      "result": "PASS"
+    },
+    {
+      "id": "X4",
+      "title": "crossing on the antimeridian",
+      "result": "PASS"
+    },
+    {
+      "id": "X5",
+      "title": "ordinary crossings",
+      "result": "PASS"
+    },
+    {
+      "id": "X6",
+      "title": "shared endpoint",
+      "result": "PASS"
+    },
+    {
+      "id": "X7",
+      "title": "incidental crossing",
+      "result": "PASS"
+    },
+    {
+      "id": "X8",
+      "title": "pair whose paths never meet",
+      "result": "PASS"
+    }
+  ],
+  "self_check": {
+    "scenarios": 25,
+    "all_passed": true
+  }
+}

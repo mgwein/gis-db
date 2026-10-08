@@ -186,7 +186,7 @@
 - Q5. Should analysis run automatically after each ingest (assumed: on demand with gisdb analyze)?
 ## 11. Status
 - [x] Phase 0: Orient and plan
-- [ ] Phase 1: Project setup
+- [x] Phase 1: Project setup
 - [ ] Phase 2: Database models and migrations
 - [ ] Phase 3: JSON ingestion
 - [ ] Phase 4: Read-only API

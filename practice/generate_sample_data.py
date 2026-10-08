@@ -1100,20 +1100,20 @@ EXPECTED_PASSES = [
     ("S3", "FLT-1003", "ZN-PITUFFIK", 1, "crossing", "crossing", 91.466229,
      (76.477753, -66.933657, "13:26:53.336"), (76.698331, -70.350698, "13:33:20.722")),
     ("S5", "FLT-1004", "ZN-POLE", 1, "crossing", "crossing", 166.384618,
-     (88.750844, None, "07:29:12.180"), (88.750844, None, None)),
+     (88.750844, None, "07:29:12.181"), (88.750844, None, None)),
     ("S5", "FLT-1005", "ZN-POLE", 1, "crossing", "crossing", 150.965896,
      (88.750844, None, "06:24:45.375"), (88.750844, None, None)),
     ("S6", "FLT-1006", "ZN-DATELINE", 1, "crossing", "crossing", 102.798115,
      (61.736781, -178.898277, "03:48:26.257"), (61.319411, 179.371275, None)),
     ("S6", "FLT-1007", "ZN-DATELINE", 1, "crossing", "crossing", 111.118326,
-     (None, None, "04:26:18.730"), None),
+     (None, None, "04:26:18.731"), None),
     ("S7", "FLT-1008", "TFR-101", 1, "touch", "touch", 0.0,
      (54.003101, -16.581974, "11:37:30.000"), (54.003101, -16.581974, "11:37:30.000")),
     ("S9", "FLT-1009", "TFR-103", 1, "crossing", "crossing", 0.863979,
      (None, None, "12:13:23.212"), (None, None, "12:13:26.787")),
     ("S10", "FLT-1010", "ZN-SURVEY", 1, "crossing", "crossing", 14.838807, None, None),
     ("S10", "FLT-1010", "ZN-SURVEY", 2, "crossing", "crossing", 18.519983,
-     None, (51.0, -3.132329, "08:15:29.999")),
+     None, (51.0, -3.132329, "08:15:30")),
     ("S10", "FLT-1010", "ZN-SURVEY", 3, "crossing", "crossing", 14.781798, None, None),
 ]
 
@@ -1583,10 +1583,17 @@ def flt1003_gap(f):
 
 
 def straight_line_min_km(p, q, zone, steps=20000):
-    """Closest approach to a zone centre of the straight lat/lon line p -> q (planar code)."""
-    return min(gc_km((p.lat + (q.lat - p.lat) * k / steps, p.lon + (q.lon - p.lon) * k / steps),
+    """Closest approach to a zone centre of the straight lat/lon line p -> q (planar code).
+
+    The best of `steps` samples, refined by golden-section search between its neighbours.
+    """
+
+    def d(f):
+        return gc_km((p.lat + (q.lat - p.lat) * f, p.lon + (q.lon - p.lon) * f),
                      (zone.lat, zone.lon))
-               for k in range(steps + 1))
+
+    k = min(range(steps + 1), key=lambda k: d(k / steps))
+    return golden_min(d, max(0, k - 1) / steps, min(steps, k + 1) / steps)[1]
 
 
 def check_s3(sc, f):
@@ -1622,7 +1629,7 @@ def check_s4(sc, f):
     mean_km = gc_km(((ga.lat + gb.lat) / 2, (ga.lon + gb.lon) / 2), (baf.lat, baf.lon))
     sc.expect(not f.rows("FLT-1003", "ZN-BAFFIN"), "FLT-1003 x ZN-BAFFIN has a pass")
     sc.expect(abs(arc_km - 476.4) <= 0.1, f"great circle {arc_km:.3f} km from the centre")
-    sc.expect(abs(straight - 0.11) <= 0.01 and abs(mean_km - 0.13) <= 0.01,
+    sc.expect(abs(straight - 0.10) <= 0.01 and abs(mean_km - 0.13) <= 0.01,
               f"straight line {straight:.3f} km, lat/lon average {mean_km:.3f} km from the centre")
     sc.evidence = (f"no pass: great circle {arc_km:.1f} km from the centre "
                    f"(r {baf.radius_km:.2f} km), straight lat/lon line {straight:.2f} km "

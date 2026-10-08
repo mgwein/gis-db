@@ -1,10 +1,10 @@
 # Practice data specification
 
-The contract for the practice data: what `practice/generate_sample_data.py` writes, why each record is there, and what a correct build must produce from it. Written 2026-10-08 (Step A) from the generated files whose sha256 values are in §2. If the files no longer match those values, this document is out of date.
+The contract for the practice data: what `practice/generate_sample_data.py` writes, why each record is there, and what a correct build must produce from it. Written 2026-10-08 (Step A) from the generated files whose sha256 values are in §2, and revised the same day after the Step A critiques: the generator's S4 self-check now refines its closest approach (0.10 km, §11.6), §5.1's D1 row is complete, and §12 is closed because DESIGN §7 now matches the key. The data files and the key did not change. If the files no longer match the §2 values, this document is out of date.
 
 Practice material only: it is not part of the service, and Step B executors never see `practice/`.
 
-**Authority.** `practice/answer_key.json` is authoritative. Every value below comes from the generated files or the key, never from the design's prototype. Where `practice/DESIGN.md` §7 differs, the key wins; §12 lists the differences.
+**Authority.** `practice/answer_key.json` is authoritative. Every value below comes from the generated files or the key, never from the design's prototype. Where `practice/DESIGN.md` §7 differs, the key wins; §12 records the 2026-10-08 reconciliation, after which none differ.
 
 | Reader | Start with |
 |---|---|
@@ -63,7 +63,7 @@ uv run --no-project --with geographiclib python practice/generate_sample_data.py
 | Randomness | `SEED = 20240501`, used only for `random.Random(SEED).shuffle` of FLT-1006's positions |
 | Other inputs | None: no clock, environment or network input; the day is fixed at 2024-05-01 |
 
-The output is byte-identical on every run. Repeated runs, `PYTHONHASHSEED` 1 and 12345, and Python 3.11.15 and 3.12.3 all give these hashes:
+The output is byte-identical on every run. Repeated runs, `PYTHONHASHSEED` 1 and 12345, and Python 3.11.15 and 3.12.3 all give these hashes (rechecked 2026-10-08 after the generator revision, which changed only the self-check's S4 line):
 
 | File | sha256 |
 |---|---|
@@ -168,20 +168,21 @@ Everything else stays as in `data/`: FLT-1005's repeated position, FLT-1006's sh
 - All four files are written with `json.dump(obj, f, indent=2)` plus a trailing newline: ASCII only, LF line endings, keys in the order shown above.
 - Numbers are written the way Python writes floats: trailing zeros dropped (`51.47`, `-3.2`), and integral floats keep `.0` (`51.0`, `0.0`; ZN-POLE is `[0.0, 90.0]`). `alt_ft`, epoch times and most radii are integers.
 
-A profiler run over the provided files (DESIGN §6.i) should report the following. Every value that §6.i lists matches its prototype.
+A profiler run over the provided files (DESIGN §6.i, with its revised rules: likely keys by distinct ratio, `epoch s` / `epoch ms`) should report the following. Every value that §6.i lists matches.
 
 | File | Path | Value |
 |---|---|---|
 | flights | records | `"flights"`, 15 items; other keys `exported_at`, `source` |
 | flights | `flight_id` | 14 present, 13 distinct; `FLT-1004` appears twice |
+| flights | `callsign` | 15 present, 14 distinct (93%, so the profiler treats it as a likely key); `PRAC104` appears twice, because index 14 is a full copy of FLT-1004. Repeated keys line: `flight_id FLT-1004 x2, callsign PRAC104 x2` |
 | flights | `positions[].coord[0]` | min -166.203515, max 178.303493. Values beyond ±90 mean this is longitude |
 | flights | `positions[].coord[1]` | min 35.5494, max 91.2 (91.2 is FLT-1012's invalid latitude) |
 | flights | `positions[].alt_ft` | 2 nulls; min 0, max 39000 |
-| flights | `positions[].ts` | `Z` 141, `±HH:MM` 41, epoch integer 28 |
+| flights | `positions[].ts` | `Z` 141, `±HH:MM` 41, `epoch s` 28 (all epoch values are below 2e10, so seconds) |
 | zones | records | `"features"`, 11 items |
 | zones | `geometry.coordinates[0]` | min -179.95, max 0.0 |
 | zones | `geometry.coordinates[1]` | min 40.6413, max 90.0 |
-| zones | `properties.radius` | min -5, max 75; `radius_unit` has 2 distinct values |
+| zones | `properties.radius` | min -5, max 75; `radius_unit` has 2 distinct values; repeated keys none |
 
 ## 4. Records and how they were built
 
@@ -267,7 +268,7 @@ Each invalid record has exactly one problem.
 
 **FLT-1003's reporting gap** runs from (70.204144, -34.143493) at 12:00:00 to (74.957916, -116.100537) at 15:00:00. That one segment is 2550.0 km long.
 
-**ZN-BAFFIN** sits 0.13 km from the lat/lon average of the gap's two ends, so the straight lat/lon line between them passes 0.11 km from its centre. The great-circle segment passes 476.4 km from it.
+**ZN-BAFFIN** sits 0.13 km from the lat/lon average of the gap's two ends, so the straight lat/lon line between them passes 0.10 km (0.0997 km) from its centre. The great-circle segment passes 476.4 km from it.
 
 **FLT-1010 survey** around ZN-SURVEY (centre (51.0, -3.0), r = 9.26 km):
 
@@ -296,7 +297,7 @@ The "usual mistake" column describes what a wrong build shows. Its counts come f
 
 | Id | Planted (exact) | Correct handling | Usual mistake and what it shows |
 |---|---|---|---|
-| D1 | Every `coord` and `geometry.coordinates` is `[lon, lat]`. Landmark: FLT-1001's first coord `[-0.4543, 51.47]` is London Heathrow | `lon, lat = coord`; FLT-1001 starts at (51.47, -0.4543) | Read as `[lat, lon]`: FLT-1003 to FLT-1007 and ZN-DATELINE are rejected `out_of_range`; the other flights and zones load in the wrong places |
+| D1 | Every `coord` and `geometry.coordinates` is `[lon, lat]`. Landmark: FLT-1001's first coord `[-0.4543, 51.47]` is London Heathrow | `lon, lat = coord`; FLT-1001 starts at (51.47, -0.4543) | Read as `[lat, lon]`: FLT-1003 to FLT-1007 (and the FLT-1004 copy at index 14) and ZN-DATELINE are rejected `out_of_range`, while FLT-1012 is accepted because its 91.2 now reads as a longitude. Run 1 shows inserted 15 (6 trajectories, 9 zones), duplicates 0, rejected 11; the stored flights and zones sit in the wrong places |
 | D2 | `alt_ft` is in feet. Radii are in NM, except ZN-SURVEY (`9.26`, `"km"`) | m = ft × 0.3048; km = NM × 1.852 (ZN-POLE: 138.9 km) | NM read as km: ZN-POLE (then 75 km) has no passes, and the total drops from 14 passes to 10. Feet not converted: altitudes 3.28 times too large |
 | D3 | Most times end in `Z`; FLT-1009 uses `+02:00`; FLT-1007 uses `-08:00`, so its first time is on 2024-04-30 local; FLT-1004 uses epoch integers | Convert to UTC: FLT-1009 starts 09:35:55Z, FLT-1007 2024-05-01T02:40:00Z, FLT-1004 06:00:00Z | Offset dropped (local wall time read as UTC): FLT-1009 starts 11:35:55Z, and X2's gap becomes 7230 s instead of 30 s. Epoch integers rejected: FLT-1004 and its copy are lost |
 | D4 | FLT-1006's positions are shuffled. FLT-1005's position 4 repeats position 3 exactly. Flights index 14 repeats index 3 (FLT-1004) exactly | Sort by time; drop the exact duplicate point (13 positions → 12 points); count index 14 once in `duplicates` | FLT-1006 unsorted: its first point is 06:00:00Z instead of 02:00:00Z, and its path zigzags. FLT-1005's repeat kept: rejected as `conflicting_points`, or the run fails on `UNIQUE (trajectory_pk, ts)`. Index 14 counted as `unchanged` instead of `duplicates`, or inserted a second time (the run fails on `UNIQUE (trajectory_id)`) |
@@ -309,7 +310,7 @@ The "usual mistake" column describes what a wrong build shows. Its counts come f
 | Scenario | What is planted | What a wrong method does |
 |---|---|---|
 | S3 | A 2550.0 km reporting gap whose great-circle arc bulges north through ZN-PITUFFIK, with no position report inside the zone | A reports-only test misses the pass. So does linear lat/lon interpolation: the straight lat/lon line passes 469.6 km from the centre |
-| S4 | ZN-BAFFIN lies 0.11 km from the straight lat/lon line between the same two reports, but 476.4 km from the great circle | Linear lat/lon interpolation invents a pass |
+| S4 | ZN-BAFFIN lies 0.10 km from the straight lat/lon line between the same two reports, but 476.4 km from the great circle | Linear lat/lon interpolation invents a pass |
 | S5, X3 | A zone centred on the North Pole; a crossing at latitude 88.7 | Longitude arithmetic and lat/lon bounding boxes break near the pole; the pole's longitude is arbitrary |
 | S6, X4 | Hourly segments that span the antimeridian, through ZN-DATELINE and through each other | Naive longitude differences jump by 360°; lat/lon boxes miss the zone |
 | S7 | The path touches TFR-101's boundary: its closest approach is about 1 mm inside | Without the 1 m touch band, the result is a crossing→crossing pass about 19 m long, or no pass |
@@ -428,7 +429,7 @@ The intent starts with the key's scenario title. All values are the key's.
 | S1 | start inside: the track starts at the zone's centre | FLT-1001 × ZN-LHR | 1 pass `track_start`→`crossing`, 46.300000 km, exit (51.596552, -1.092003) at 09:03:09.409 |
 | S2 | end inside and start inside | FLT-1001 × ZN-JFK; FLT-1002 × ZN-JFK and × ZN-LHR | FLT-1001 × ZN-JFK: `crossing`→`track_end`, 55.560000 km, entry (40.952204, -73.261404) at 15:13:56.423. FLT-1002 × ZN-JFK: `track_start`→`crossing`, 55.560000 km, exit 13:08:42.240. FLT-1002 × ZN-LHR: `crossing`→`track_end`, 46.300000 km, entry 19:11:14.825 |
 | S3 | great-circle bulge inside a reporting gap: 3 h and 2550.0 km between reports, none inside the zone | FLT-1003 × ZN-PITUFFIK | 1 pass `crossing`→`crossing`, 91.466229 km: entry (76.477753, -66.933657) at 13:26:53.336, exit (76.698331, -70.350698) at 13:33:20.722, inside the 12:00–15:00 gap. The straight lat/lon line passes 469.6 km from the centre |
-| S4 | zone hit only by a straight lat/lon line | FLT-1003 × ZN-BAFFIN | **No pass.** The great circle passes 476.4 km from the centre (r = 111.12 km); the straight lat/lon line passes 0.11 km from it |
+| S4 | zone hit only by a straight lat/lon line | FLT-1003 × ZN-BAFFIN | **No pass.** The great circle passes 476.4 km from the centre (r = 111.12 km); the straight lat/lon line passes 0.10 km from it |
 | S5 | polar zone centred on (90, 0) | FLT-1004 and FLT-1005 × ZN-POLE | 1 pass each, `crossing`→`crossing`. FLT-1004: 166.384618 km, 07:29:12.181–07:41:22.650. FLT-1005: 150.965896 km, 06:24:45.375–06:35:48.152. All four endpoints at lat 88.750844 |
 | S6 | zone on the antimeridian; hourly segments span ±180° | FLT-1006 and FLT-1007 × ZN-DATELINE | FLT-1006: 102.798115 km, entry (61.736781, -178.898277) at 03:48:26.257, exit (61.319411, 179.371275) at 03:55:31.629. FLT-1007: 111.118326 km, entry (61.790257, -178.911862) at 04:26:18.731, exit (61.596575, 179.020594) at 04:34:03.877 |
 | S7 | path touches the boundary at one point (closest approach about 1 mm inside) | FLT-1008 × TFR-101 | 1 pass `touch`→`touch` at (54.003101, -16.581974), 11:37:30; 0.0 km, 0.0 s |
@@ -710,7 +711,7 @@ D7 PASS rejected flights.json#10 FLT-1011 too_few_points, #11 FLT-1012 out_of_ra
 S1 PASS track_start->crossing 46.300000 km, exit (51.596552,-1.092003) 09:03:09.409Z
 S2 PASS FLT-1001 x ZN-JFK crossing->track_end 55.560000 km entry (40.952204,-73.261404) 15:13:56.423Z; FLT-1002 x ZN-JFK track_start->crossing exit 13:08:42.240Z; FLT-1002 x ZN-LHR crossing->track_end entry 19:11:14.825Z
 S3 PASS crossing->crossing 91.466229 km, 13:26:53.336Z-13:33:20.722Z inside the 12:00-15:00 gap (2550.0 km), no report inside; straight lat/lon line 469.6 km from the centre (miss)
-S4 PASS no pass: great circle 476.4 km from the centre (r 111.12 km), straight lat/lon line 0.11 km (lat/lon average of the gap ends 0.13 km)
+S4 PASS no pass: great circle 476.4 km from the centre (r 111.12 km), straight lat/lon line 0.10 km (lat/lon average of the gap ends 0.13 km)
 S5 PASS FLT-1004 166.384618 km entry 07:29:12.181Z; FLT-1005 150.965896 km entry 06:24:45.375Z; endpoints at lat 88.750844/88.750844/88.750844/88.750844
 S6 PASS FLT-1006 102.798115 km entry (61.736781,-178.898277) 03:48:26.257Z exit (61.319411,179.371275); FLT-1007 111.118326 km entry 04:26:18.731Z
 S7 PASS touch at (54.003101,-16.581974) 11:37:30Z
@@ -755,7 +756,7 @@ Then come the scenario's own checks:
 | D5–D6 | `squawk` is present and FLT-1008 is stored; exactly FLT-1003's positions 2 and 3 are null and its `length_3d_km` is null |
 | D7 | The rejections and counts of runs 1 and 2, and the table counts after run 2 |
 | S3 | The gap is 3 h and 2550 km (±1 km); the pass lies inside the gap; no report is inside; the straight line passes outside, at 469.6 ± 0.1 km |
-| S4 | No pass; the great circle is at 476.4 ± 0.1 km, the straight line at 0.11 ± 0.01 km, the lat/lon average at 0.13 ± 0.01 km |
+| S4 | No pass; the great circle is at 476.4 ± 0.1 km, the straight line at 0.10 ± 0.01 km (the best of 20,000 samples, refined by golden-section search between its neighbours), the lat/lon average at 0.13 ± 0.01 km |
 | S7 | The closest approach is within 1 m of the boundary |
 | S8 | No pass; the closest approach is +5.041 ± 0.01 m; FLT-1008 × ZN-SURVEY has no pass, at 0.236 ± 0.001 km; these two are the nearest pairs without a pass, and the next is more than 56 km out |
 | S9 | The deepest point is -5.039 ± 0.01 m, and no FLT-1009 report is inside |
@@ -765,25 +766,19 @@ Then come the scenario's own checks:
 
 ## 12. Differences from the design record
 
-Where these disagree, the answer key is right and `practice/DESIGN.md` is not.
+None remain. DESIGN §7 was reconciled with the key on 2026-10-08; should the two ever disagree again, the answer key is right.
 
-| Item | DESIGN.md | Answer key / generator | Note |
-|---|---|---|---|
-| S5: FLT-1004 × ZN-POLE entry time (§7.5) | 07:29:12.180 | 07:29:12.181 (unrounded 07:29:12.180955) | The design's prototype truncated to the millisecond; the key rounds. 1 ms, within the 1 s tolerance |
-| S6: FLT-1007 × ZN-DATELINE entry time (§7.5) | 04:26:18.730 | 04:26:18.731 (unrounded 04:26:18.730888) | Same cause |
-| S10: FLT-1010 × ZN-SURVEY pass 2 exit time (§7.5) | 08:15:29.999 | 08:15:30 (unrounded 08:15:29.999524) | Same cause. The exit lies 2.9 cm before vertex 3, whose time is 08:15:30 |
-| S9 method notes: §7.5 "no sample inside"; §7.7 "If g_min < -0.001 km with no bracketed sign change, bisect the two roots … (catches S9)" | S9 has no 0.5 km sample inside TFR-103, so only the narrow-dip rule finds it | Two samples are 3.351 m inside, so ordinary sign changes bracket the pass. The narrow-dip rule fires nowhere in this data. What holds is that no position report is inside | All S9 values match. Suggested wording: §7.5 "no report inside"; §7.7 "catches a dip narrower than the sampling step" |
+What the reconciliation changed in DESIGN, for traceability:
 
-**Precision only, not disagreements.** The design gives some gaps to 0.1 s; the key gives them to the millisecond. The values agree:
-
-| Scenario | Design | Key |
+| Item | DESIGN before | Now (key and generator) |
 |---|---|---|
-| X3 | 4661.8 s | 4661.85 s (unrounded 4661.849827; the self-check prints 4661.9) |
-| X4 | 2276.4 s | 2276.385 s |
-| X5 | 4857.8 s and 25601.2 s | 4857.802 s and 25601.161 s |
-| X7 | 9024.9 s | 9024.867 s |
+| S5: FLT-1004 × ZN-POLE entry time (§7.5) | 07:29:12.180 | 07:29:12.181 (unrounded 07:29:12.180955) |
+| S6: FLT-1007 × ZN-DATELINE entry time (§7.5) | 04:26:18.730 | 04:26:18.731 (unrounded 04:26:18.730888) |
+| S10: FLT-1010 × ZN-SURVEY pass 2 exit time (§7.5) | 08:15:29.999 | 08:15:30 (unrounded 08:15:29.999524; the exit lies 2.9 cm before vertex 3, whose time is 08:15:30) |
+| S3 and S9 wording (§7.5); the narrow-dip rule (§7.7) | "no sample inside"; the rule "catches S9" | "no position report inside": S3's pass holds more than 180 samples and S9's two, 3.351 m inside, so ordinary sign changes bracket both; the narrow-dip rule is a safety net that fires nowhere in this data (§11.3) |
+| S4: the straight lat/lon line's closest approach to ZN-BAFFIN (§7.4, §7.5) | 0.11 km | 0.10 km (0.0997 km). 0.11 was the best of 20,000 samples; the generator now refines it (§11.6) |
+| Gaps of X1's `overlap_end`, X3, X4, X5 and X7 (§7.5) | not stated, or to 0.1 s | the key's values: 7963.0, 4661.85, 2276.385, 4857.802 and 25601.161, 9024.867 s |
+| Time format of the key (§7.7) | "millisecond precision" | rounded to the millisecond, `.000` left out on whole seconds (§9.2) |
+| Self-check FOUND SET line (§7.7) | passes and intersections only | also the per-trajectory, per-zone and after-analysis counts |
 
-Two more points that are not disagreements:
-
-- The design does not state X1's `overlap_end` gap. The key's 7963.0 s follows from the stated times.
-- The self-check's FOUND SET line also covers the per-trajectory, per-zone and after-analysis counts. That is more than §7.7 describes.
+The generator's `EXPECTED_PASSES` carries the three corrected times. It compares within 1 s, so its output and the four files did not change.

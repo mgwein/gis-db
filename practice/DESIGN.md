@@ -1,12 +1,12 @@
 # gis-db practice build: design record
 
-Merged design for the interview practice build: the single source for the mock brief, the data spec, the data generator and the playbook. Written 2026-10-08 (Step A.1).
+Merged design for the interview practice build: the single source for the mock brief, the data spec, the data generator and the playbook. Written 2026-10-08 (Step A.1). Revised 2026-10-08 after the four Step A critiques (coverage, executability, data, adaptation): §2.2 lists every decision that changed, with its finding id, and §7 is reconciled with the generated answer key.
 
 **Contents**
 1. Purpose and reader map
 2. Resolved decisions (2.1 decision table, 2.2 deviations)
 3. Placeholder registry and PLAN.md
-4. Time budget (phases, tripwires, cut list, never-cut core)
+4. Time budget (phases, tripwires, cut list, never-cut core, run sheet)
 5. Model routing and AI habits (prompt inventory, escalation, tokens, contract and gate, AI log, human-only steps, Conventions block)
 6. Target architecture (a layout, b settings, c schema and migrations, d ingestion, e API, f logging, g analysis, h tests, i scripts, j NOTES.md)
 7. Practice data (files, shapes, gotchas, generator recipe, scenarios, expected results, answer key)
@@ -80,8 +80,8 @@ Two audits followed (consistency and technical), and their fixes were probed the
 | Table naming | **Generic, fixed** names. 0001: `ingest_runs`, `ingest_rejections`, `trajectories`, `trajectory_points`, `zones`. 0002: `analysis_runs`, `trajectory_metrics`, `zone_passes`, `trajectory_intersections`. Brief terms map to these in PLAN §3 | Prompts paste unchanged whatever the brief's domain; the overview itself says "trajectories"; no name placeholders for the small model to mangle |
 | API paths | `/trajectories`, `/zones` (same generic words) | One vocabulary from DB to URL |
 | Primary keys | Every table has a surrogate `id INTEGER` PK, except points (`PK (trajectory_pk, seq)`) and metrics (`PK trajectory_pk`). The natural key is `trajectory_id` / `zone_id`, `String(64)` NOT NULL UNIQUE. Rule: `id` = internal (never in the API); `<x>_id` = natural string key (URLs, JSON); `<x>_pk` = integer FK to `<x>s.id` | Integer `a_pk < b_pk` CHECK avoids collation traps of string keys; verified on PG and SQLite; the suffix rule removes the `flight_id` ambiguity |
-| Placeholder syntax | `<NAME=value>` in prompt (```text) blocks only, every occurrence written in full. Bash blocks never contain `<...>`; they use shell variables exported once (§3.3). Exception: the body of a quoted heredoc (`<<'EOF'`), such as Human step 0.b's PLAN.md skeleton, is literal text and may contain them | `<` is a redirect in bash; full occurrences keep every prompt self-contained |
-| Prompts | 17 mandatory + 1 optional. Large (8): P0.2, P2.1, P3.1, P3.2, P4.1, P6.1, P6.4, P6.5. Small (9): P0.1, P1.1, P4.2, P5.1, P6.2, P6.3, P7.1, P7.2, P7.3. Optional large review: P7.4 (unscheduled; only on time saved earlier) | Large for synthesis, first-of-pattern, geometry, integration; small for exact specs, pattern copies, tests from case lists, scripts, docs |
+| Placeholder syntax | `<NAME=value>` in prompt (```text) blocks only, every occurrence written in full. A value never contains `<` or `>` (arrows are written `→`), so `<([A-Z][A-Z0-9_]*)=([^>]*)>` recovers every value whole. PLAN §3's "Placeholder values" table wins over a stale value in a prompt (§3.1, §5.7). Bash blocks never contain `<...>`; they use shell variables exported once (§3.3). Exception: the body of a quoted heredoc (`<<'EOF'`), such as Human step 0.b's PLAN.md skeleton, is literal text and may contain them | `<` is a redirect in bash; full occurrences keep every prompt self-contained; one table in PLAN.md makes a missed edit harmless |
+| Prompts | 17 mandatory + 1 optional. Large (9): P0.2, P2.1, P3.1, P3.2, P4.1, P6.1, P6.2, P6.4, P6.5. Small (8): P0.1, P1.1, P4.2, P5.1, P6.3, P7.1, P7.2, P7.3. Optional large review: P7.4 (unscheduled; only on time saved earlier) | Large for synthesis, first-of-pattern, geometry, integration and the numerically subtle oracle (P6.2); small for exact specs, pattern copies, scripts, docs |
 | Data set | Geo proposal's real-route geometry, adjusted (§7): `data/flights.json` (15 records) + `data/zones.json` (GeoJSON, 11 features); 25 scenarios D1–D7, S1–S10, X1–X8 | Verified geometry with planar traps and must-be-absent cases |
 | Checks | Both kinds. Verify blocks use in-process `scripts/api_get.py` (TestClient, no ports). The live server runs only inside `scripts/smoke.py`, which owns it with bounded waits, called by `scripts/verify.sh` | No hand-managed servers; one live proof including JSON logs |
 | Package and layout | Package `gisdb`, src layout, `uv init --package --name gisdb --python 3.12 --vcs none --author-from none .`; console script `gisdb = "gisdb.cli:main"` | Verified; no git identity copied into `pyproject.toml` |
@@ -95,7 +95,7 @@ Two audits followed (consistency and technical), and their fixes were probed the
 | Ingest runs | One `ingest_runs` row per CLI invocation, committed as `running` first. All data writes of the run happen in one transaction. CHECK `seen = inserted + updated + unchanged + duplicates + rejected` on succeeded runs | Simple all-or-nothing; the DB enforces the audit identity |
 | Analysis persistence | 0002 is create-only (4 tables); full recompute in one transaction; provenance on `analysis_runs` | No `alter_column` on 0001 tables; idempotent |
 | Commit messages | Per prompt (gate): `P3.1: <what> [AI: large]`. Per phase (checkpoint): `phase 3: <title> [AI: P3.1 L, P3.2 L; human: <what>]` | AI evidence in `git log` |
-| AI-usage log | `AI_LOG.md` at the repo root, one table row per prompt: `\| min \| prompt \| model \| ask \| verified by \| outcome \|` (§5.5) | Graded evidence, appended by hand in 20 s |
+| AI-usage log | `AI_LOG.md` at the repo root, one table row per prompt: `\| min \| prompt \| model \| ask \| verified by \| outcome \|` (§5.5), appended with the `ailog` shell helper, which fills `min` from the session clock `T0` | Graded evidence in a few seconds per prompt; no minute arithmetic |
 | Entry points | `uv run gisdb ingest [PATH ...]` (default `data`), `uv run gisdb analyze`, `uv run gisdb stats`, `uv run gisdb serve [--host 127.0.0.1] [--port 8000]`, `bash scripts/verify.sh [DATA_DIR]` → last line `VERIFY OK` | One CLI, one verify command |
 | Data profile location | `DATA_PROFILE.md` at the repo root, written by `python3 scripts/profile_data.py data/*.json` | Step B executors must not see `docs/` |
 | Single-point tracks | Invalid: `too_few_points`; CHECK `point_count >= 2`; the brief states it | Removes an ambiguous edge case from the answer key |
@@ -112,15 +112,57 @@ Two audits followed (consistency and technical), and their fixes were probed the
 | Delivery proposal: answer key shown to the AI (P7.3) | `practice/check_answer_key.py` is written in Step C and never given to an executor | Handoff: candidate-only checker |
 | Ruff scope (HANDOFF §9: `extend-exclude = ["temp"]`) | `extend-exclude = ["temp", "practice", "*.md"]`; `scripts/*` also ignores `BLE001` and `E501` (§6.a) | `practice/*.py` prints, so it would fail every gate and `verify.sh` in Step B. Ruff 0.16 formats Python blocks inside Markdown, so it would rewrite the brief and the docs. Harmless on the day |
 | Step B mechanics (HANDOFF §8 Step B) | Runs in a sparse clone without `docs/` and `practice/`. Makes the playbook's per-prompt gate commits plus the `practice: phase N — <title>` checkpoint commit (§10) | Executors cannot read the playbook or the answer key. The playbook's own commit flow, and Verify 6's `git log` check, are exercised |
-| Design-record size (HANDOFF §8 A.1: 25–40 KB; task: about 40–60 KB) | About 187 KB (160 KB before the audit fixes) | The required content pins every column, endpoint, test, script contract, scenario and the verbatim geo spec. The task ranks exactness and completeness above brevity, and the reader map limits each agent to its sections |
+| Design-record size (HANDOFF §8 A.1: 25–40 KB; task: about 40–60 KB) | About 240 KB (160 KB before the audit fixes, 187 KB before the Step A critiques; the revision record above and Appendix E's ready blocks add most of the rest) | The required content pins every column, endpoint, test, script contract, scenario and the verbatim geo spec. The task ranks exactness and completeness above brevity, and the reader map limits each agent to its sections |
+
+**Revisions after the Step A critiques (2026-10-08).** Each row is a decision that changed; the playbook follows these rows. Finding ids refer to `temp/stepA/critiques/` (COV coverage, EX executability, DATA data, ADP adaptation; K1–K6 the writers' known issues).
+
+| Finding | Decision now | Before | Sections |
+|---|---|---|---|
+| K1: COV-11, EX-04, DATA-01, ADP-21 | `ALT_UNIT` is `alt_ft in feet (x 0.3048 → alt_m), may be null`. No placeholder value contains `<` or `>` | `-> alt_m`, which cut a `<NAME=[^>]*>` parse short | §2.1, §3.1 |
+| COV-05, ADP-14 | PLAN §3 ends with a "Placeholder values" table holding every §3.1 name except `BRIEF`. Conventions line 1: PLAN's value wins over a stale prompt value, and the model says so | the table held 9 names; no precedence rule | §3.1, §3.2, §5.7 |
+| ADP-05 | `TRAJECTORY_ATTRS` and `ZONE_ATTRS` carry their column types; new placeholder `POINT_ATTRS` (practice `none`) for per-point fields; response fields are typed from their columns; P4.1 seeds every attribute and asserts the round trip; a `String(n)` attribute is validated with `max_length=n`, so an over-long value rejects its record instead of failing the run on Postgres (no practice value comes close) | types only in a P2.1 parenthetical; every attribute `str \| None`; no point attributes | §3.1, §6.c–§6.e, §6.h |
+| ADP-06 | `TRAJECTORY_SOURCE` and `ZONE_SOURCE` name the key's type; an integer key gets `coerce_numbers_to_str=True` and `record_key` returns its decimal string | integer keys rejected as `invalid_value` | §3.1, §6.d |
+| ADP-01 | P3.1's test list is split into 8 format-independent items and 8 format cases (practice values, rewritten on the day from Appendix E.3's drop-ins); the time rule and the radius-unit rule are conditional on PLAN §3; record fields follow `TRAJECTORY_ATTRS` | one note called the "Shapes" sentence the only practice-specific part | §6.d, §6.h, §9.3, §9.4 |
+| ADP-02 | Every prompt that reads PLAN §3–§8 ends its TASK with the DELTA item (§5.4), and the gate steps start with `grep -nE '^([-*] )?DELTA:' PLAN.md` before sending | no prompt applied DELTA lines | §3.2, §5.4 |
+| ADP-03 | Conventions lines "Coordinates" and "Geo" name PLAN §3 and §8 instead of `[lon, lat]` and 6371.0088 | practice values in the pasted block | §5.7 |
+| EX-02 | P2.1 writes long CHECK texts as implicitly concatenated pieces and its DONE WHEN runs ruff; a Conventions "Lint" line makes every prompt run ruff on its own files | two CHECK literals of 101 and 183 characters failed `gate lint` | §5.7, §6.c, §9.3 |
+| COV-15, EX-07, ADP-09 | Kickoff header: read PLAN.md "if PLAN.md exists"; never open "the provided data files (PLAN.md §3 lists them)"; ends "The first prompt follows.", pasted together with the first prompt | "Wait for my first prompt."; `data/*.json` hard-coded | §5.3, §5.4 |
+| EX-09, EX-03, DATA-06, EX-14 | `gate` returns non-zero on a forbidden API, a leftover `<NAME=` token, a ruff failure or a pytest failure; pytest runs under `timeout 120` | the status was `tail`'s; no token check; §5.4 lacked the timeout | §5.4 |
+| COV-08 | A session clock `T0` with the helpers `m` (elapsed minutes) and `ailog` (one AI_LOG row); every prompt ends with a two-line "After" block (`gate`, then `ailog … && git add -A && git commit …`); the top section opens with a 5-minute read and a run sheet (§4.5) | "Then run the gate and log the prompt (top section)."; `date +%H:%M`; a 33 KB top section | §3.3, §4.5, §5.4, §5.5, §9.2 |
+| COV-10, ADP-24 | One playbook copy each of the Conventions block (Human step 0.b's heredoc) and of `gate` (Human step 1.a); the top section points to them. Appendix A.3–A.6 condensed; F.1–F.4 dropped | two copies of each | §9.2, §9.4 |
+| COV-02, COV-03, COV-04, K3 (EX-11, DATA-05, ADP-23) | Re-timed budget: P0.1 is sent at minute 1, before the reading; Phase 4 73–90; Phase 5 90–100; Phase 6 100–153 (53 min); Phase 7 153–172 with Human step 7.a named; buffer 172–180. P7.2's DONE WHEN no longer runs `verify.sh`; Verify 6 and 7 reuse the latest gate tail and the saved `verify.sh` tail | Phase 0 over-packed; Phase 6 without slack; `verify.sh` run 3–4 times | §4.1, §4.5, §9.3 |
+| COV-06 | Cut savings are realistic (28 minutes in all). Cut 8 is insert-only ingestion (run 2 unchanged); cut 9 is last; tripwire 73 no longer ships a data-changing re-run | 44 minutes; cut 8 full refresh broke "must not change data" | §4.2–§4.4 |
+| COV-07 | Tripwires 47, 58 and 135 and cut 7 have executable actions (cut 7 is a 3-line hand edit of `geodesy.py` plus the test deletions) | defer `test_round_trip`; send P3.2 while P3.1 is red; an unspecified split; tests deleted without the code change | §4.2, §4.3 |
+| ADP-11 | A cut or tripwire skip that removes a requirement of PLAN §2 is a last resort; Verify 0's review marks them. Practice: cut 7 (touch and overlap are defined), cut 9 (report what you skipped) and the P4.2 skip (zone endpoints are R3) | cuts ranked for practice only | §4.2, §4.3, §9.3 |
+| COV-09 | P6.2 runs on the large model; calibration at minute 30 moves only P5.1 | P6.2 small | §2.1, §4.2, §5.1 |
+| COV-16 | Expected spend counts context re-sent per tool call (small 50–150k, large 150–400k; about 3–7M in all); the token tripwire is per model | 1.1–3.5M, below its own 300k tripwire | §5.3 |
+| EX-01 | `verify.sh` separates commands with `;`, never `&&` | `&&` lists hid failures from `set -e` | §6.i |
+| EX-03 | `verify.sh` holds the `DATA_DIR` value, never the token; P7.3 replaces every token; Verify 7 greps README, NOTES and code for `<NAME=` | tokens could leak into committed files | §3.3, §6.i, §6.j, §9.3 |
+| EX-05, EX-06, EX-08, EX-10, EX-16 | `api_get.py` imports with a blank line between third- and first-party; `Reviewed:` goes on docstring line 3; never run `gate` before P1.1; `test_round_trip` builds its own Config with `configure_logger` False; P6.2's base azimuth and test 4's zone are pinned | I001 on first lint; the review line joined the migration message; a failing first gate; a fixture-order trap; two choices left to the model | §6.a, §6.c, §6.g, §6.h, §6.i |
+| COV-01, COV-13, COV-14 | README carries assumptions as bullets and a "## AI usage" section; tests assert CORS and two-line request correlation; Verify 3 shows the `ingest_runs` audit rows, Verify 6 a length and pass times; a missing dev database is created, not replaced by SQLite | brief requirement 7's AI part missing; four requirements never shown | §6.h, §6.j, §9.3, §9.4 |
+| ADP-04, ADP-07, ADP-08 | Appendix E.8 covers maps keyed by id, register files, file order and cross-file references; file order stays by name unless a PLAN §5 DELTA sets it; Verify 3 checks that no file was rejected whole; the profiler handles maps, flags likely keys and tells epoch seconds from milliseconds; Phase 0's checks use PG* variables and placeholder-name greps | practice-shaped recipes and checks | §3.3, §6.d, §6.i, §9.3, §9.4 |
+| ADP-10, ADP-12, ADP-13, ADP-15–ADP-20, COV-17, COV-18 | Appendix E gains the closest-approach block, a path and unit replace list, day-of edit windows, drop-in values for R = 6371.0, a regional landmark rule, a demo substitute and a `TOL_KM` caveat; the radius recompute is a logged large-model ask; pass and migration counts are labelled practice; the interviewer is asked about prepared templates | appendix gaps; a pasted 20-line script | §3.1, §6.c, §6.h, §9.1, §9.3, §9.4 |
+| K2, DATA-02, DATA-03, DATA-07 (COV-12, EX-12, ADP-22) | §7 values equal the answer key (three times, S3/S9 wording, the narrow-dip rule, S4's 0.10 km); the generator's S4 check refines its minimum; §8.2 lists conflicting reports and duplicates as deliberately light | truncated times, "no sample inside", 0.11 km | §7, §8.2 |
+
+**Not adopted, with the reason:**
+
+- COV-03 option 3 (P6.3 and H6.a moved into Phase 2): Phase 2 has no slack, and create-only 0002 is a talking point.
+- COV-06 option 5 (merge P4.2 into P4.1): the large-pattern, small-copy pair is graded AI-use evidence; cuts 1–3 recover the same minutes.
+- ADP-04, two parts: "raise when a PLAN §3 file is not recognized" (`records.py` cannot know PLAN §3's file list without hard-coding names; Verify 3's `file`-rejection check catches the same loss) and "always order files by entity rank" (it would reorder the practice rejection rows; a PLAN §5 DELTA sets the order when references need it, Appendix E.8).
+- ADP-12's alternative placeholders `TRAJECTORY_PATH` and `ZONE_PATH`: an explicit replace list (Appendix E.2) costs fewer occurrences.
+- ADP-20's second tolerance for overlap and dedupe: the geodesy spec has one `TOL_KM`; Appendix E.3 says to ask instead.
+- EX-13 (cut 8 cascades analysis rows at Human step 7.a): superseded, since cut 8 is now insert-only and deletes nothing.
+- K4 and K5 need no change beyond EX-05's blank line; Verify 6's `"time_gap_s":30.0` is exact.
 
 ## 3. Placeholder registry and PLAN.md
 
 ### 3.1 Placeholders
 
-**Syntax:** `<NAME=value>`. NAME is upper snake case. The value is the practice value, written in full at **every** occurrence.
-- On the day, the candidate overwrites only the value, using what PLAN.md records.
-- PLAN §1 Conventions tells the model: "Tokens written `<NAME=value>` in a prompt mean: use `value`."
+**Syntax:** `<NAME=value>`. NAME is upper snake case. The value is the practice value, written in full at **every** occurrence. A value never contains `<` or `>` (arrows are written `→`), so the pattern `<([A-Z][A-Z0-9_]*)=([^>]*)>` recovers it whole, by hand or by a Step B fill.
+
+- PLAN §3 ends with a "Placeholder values" table (`NAME | value`) holding every name below except `BRIEF`, with the values for this brief. P0.2 writes it, and Verify 0's review checks it against the profile.
+- PLAN §1 Conventions tells the model: "Tokens written `<NAME=value>` in a prompt mean: use value. If PLAN.md §3 "Placeholder values" gives NAME a different value, use PLAN's value and say so in your reply." A value the candidate forgets to overwrite is therefore harmless.
+- On the day, the candidate still overwrites the values of each prompt before sending it, and makes the day-of edits that placeholders cannot carry (Appendix E.1: P3.1's format cases, mandated paths and units, an extra analysis). Rule: never send a prompt before its day-of edits are done.
 - Placeholders appear only inside prompt (```text) blocks.
 - Playbook writers use no other placeholder names. Anything else brief-specific is cited as "per PLAN §n".
 
@@ -130,18 +172,25 @@ Two audits followed (consistency and technical), and their fixes were probed the
 | `DATA_DIR` | Directory of provided JSON files | Phase 0, Human step 0.a | `data` |
 | `DB_URL` | Dev database URL | Phase 0 env check → PLAN §9 | `postgresql+psycopg://gis:gis@localhost:5432/gis` |
 | `TEST_DB_URL` | Test database URL (name must contain `test`) | Phase 0 → PLAN §9 | `postgresql+psycopg://gis:gis@localhost:5432/gis_test` |
-| `TRAJECTORY_SOURCE` | File, record list and natural key of trajectory records | P0.2 → PLAN §3 | `flights.json → "flights" list; key flight_id` |
+| `TRAJECTORY_SOURCE` | File, record list and natural key (with its JSON type) of trajectory records | P0.2 → PLAN §3 | `flights.json → "flights" list; key flight_id (string)` |
 | `POINT_SOURCE` | Position list inside a trajectory record and its fields | P0.2 → PLAN §3 | `positions[]: ts, coord, alt_ft` |
-| `ZONE_SOURCE` | File, record list and natural key of zone records | P0.2 → PLAN §3 | `zones.json → GeoJSON "features" list (geometry Point); key = feature "id"` |
-| `TRAJECTORY_ATTRS` | Descriptive source fields → trajectory columns | P0.2 → PLAN §3 | `callsign → callsign, aircraft.icao_type → aircraft_type, origin → origin, destination → destination` |
-| `ZONE_ATTRS` | Descriptive source fields → zone columns | P0.2 → PLAN §3 | `properties.name → name` |
-| `COORD_ORDER` | Order inside coordinate arrays | Human step 0.b (landmark check) → PLAN §3 | `[lon, lat]` |
-| `TIME_FORMATS` | Accepted timestamp forms | P0.2 → PLAN §3 | `ISO-8601 with Z or ±HH:MM offset, or integer Unix epoch seconds` |
-| `ALT_UNIT` | Altitude field and unit | P0.2 → PLAN §3 | `alt_ft in feet (x 0.3048 -> alt_m), may be null` |
-| `RADIUS_UNITS` | Radius field and unit field | P0.2 → PLAN §3 | `properties.radius with properties.radius_unit "NM" (x 1.852) or "km"` |
+| `POINT_ATTRS` | Descriptive per-point source fields → typed NULL columns of `trajectory_points` (for example a speed); `none` if there are none | P0.2 → PLAN §3 | `none` |
+| `ZONE_SOURCE` | File, record list and natural key (with its JSON type) of zone records | P0.2 → PLAN §3 | `zones.json → GeoJSON "features" list (geometry Point); key = feature "id" (string)` |
+| `TRAJECTORY_ATTRS` | Descriptive source fields → trajectory columns, each with its column type | P0.2 → PLAN §3 | `callsign → callsign String(32), aircraft.icao_type → aircraft_type String(16), origin → origin String(8), destination → destination String(8)` |
+| `ZONE_ATTRS` | Descriptive source fields → zone columns, each with its column type | P0.2 → PLAN §3 | `properties.name → name String(128)` |
+| `COORD_ORDER` | Coordinate layout: the order inside coordinate arrays, or the names of separate fields | Human step 0.b (landmark check) → PLAN §3 | `[lon, lat]` |
+| `TIME_FORMATS` | Accepted timestamp forms, and whether naive times count as UTC | P0.2 → PLAN §3 | `ISO-8601 with Z or ±HH:MM offset, or integer Unix epoch seconds` |
+| `ALT_UNIT` | Altitude field and unit | P0.2 → PLAN §3 | `alt_ft in feet (x 0.3048 → alt_m), may be null` |
+| `RADIUS_UNITS` | Radius field and unit field (or its fixed unit) | P0.2 → PLAN §3 | `properties.radius with properties.radius_unit "NM" (x 1.852) or "km"` |
 | `EARTH_RADIUS_KM` | Sphere radius | P0.2 → PLAN §8 | `6371.0088` |
-| `TOL_KM` | Geometric tolerance: max(0.001, coordinate quantization). T5 assumes it is below 0.004; above that, Appendix E's T5 rule applies | P0.2 → PLAN §8 | `0.001` |
+| `TOL_KM` | Geometric tolerance: max(0.001, coordinate quantization). T5 assumes it is below 0.004; above that, Appendix E's T5 rule applies. It must stay well below the domain's smallest meaningful separation (zone radii, conflict thresholds): a coarser value turns parallel tracks into overlaps, so ask the interviewer first (Appendix E.3) | P0.2 → PLAN §8 | `0.001` |
 | `SAMPLE_TRJ` | A trajectory id used in NOTES.md commands (P7.3 writes it literally) | Human step 0.b, from DATA_PROFILE.md; after Phase 6, switch to one with a zone pass if it has none | `FLT-1003` |
+
+Where the revised values go (P2.1, P3.1 and P4.1 carry `POINT_ATTRS`; the typed `ATTRS` values replace P2.1's former type parenthetical):
+
+- P2.1: the trajectory, point and zone descriptive columns, typed as the values say, all NULL.
+- P3.1: one source field per `ATTRS` entry in the source models, the record dataclasses and the hash payload; `POINT_ATTRS` fields go on `PointRecord` and into each point of the payload.
+- P4.1: one response field per descriptive column, typed from its column: `String` → `str | None`, `Integer` → `int | None`, `Float` → `float | None`; `PointOut` gains the `POINT_ATTRS` fields.
 
 ### 3.2 PLAN.md: exact headings
 
@@ -166,30 +215,39 @@ The candidate creates PLAN.md in Human step 0.b by pasting this skeleton, with �
 |---|---|---|
 | §1 Conventions | The §5.7 block, verbatim (pasted by the candidate) | every prompt |
 | §2 Brief | Numbered requirements R1..Rn in the brief's words; analysis requirements quoted verbatim | P0.2, P7.3 |
-| §3 Data mapping | Names (brief term → generic table); per file: record list path, entity, natural key; every source field → column, type, unit, conversion; coordinate order with the landmark proof; timestamp forms; validation rules → reason codes (§6.d) | P2.1, P3.1, P3.2 |
+| §3 Data mapping | Names (brief term → generic table); per file: record list path, entity, natural key and its JSON type; every source field → column, type, unit, conversion; coordinate layout with the landmark proof; timestamp forms; validation rules → reason codes (§6.d); then the "Placeholder values" table (`NAME \| value`) for every §3.1 name except `BRIEF` | P2.1, P3.1, P3.2; the table is read by every prompt that carries a placeholder (Conventions line 1) |
 | §4 Schema | Default schema of §6.c plus DELTA lines for brief-specific columns | P2.1, P6.3 |
-| §5 Ingestion | Default of §6.d plus DELTA lines | P3.1, P3.2 |
-| §6 API | Default of §6.e plus DELTA lines | P4.1, P4.2, P6.5 |
+| §5 Ingestion | Default of §6.d plus DELTA lines (for example a file order, Appendix E.8) | P3.1, P3.2 |
+| §6 API | Default of §6.e plus DELTA lines (for example mandated paths or output units, Appendix E.2) | P4.1, P4.2, P6.5 |
 | §7 Logging | Event catalogue of §6.f plus DELTA lines | P3.2, P5.1, P6.4 |
-| §8 Analysis | Earth model, definitions (§8.3 wording adapted to the brief), `TOL_KM` with the arithmetic (6 decimals → 0.11 m → 0.001 km), storage | P6.1, P6.4, P6.5, P7.1 |
+| §8 Analysis | Earth model, definitions (§8.3 wording adapted to the brief), `TOL_KM` with the arithmetic (6 decimals → 0.11 m → 0.001 km), storage; an extra analysis as a DELTA line (Appendix E.5) | P6.1, P6.4, P6.5, P7.1 |
 | §9 Commands | migrate / ingest / analyze / stats / serve / test / verify, with the DB URLs | P1.1, P7.2, P7.3 |
 | §10 Decisions and open questions | Assumptions taken, plus ≤ 5 questions for the interviewer | P7.3 |
 | §11 Status | Checklist Phase 0..7 (the candidate ticks a phase at each checkpoint) | kickoff header |
 
+**DELTA lines are applied, not just recorded.** A DELTA line in §4–§8 changes a default of §6. Each prompt that reads those sections ends its TASK with the DELTA item of §5.4, so the model applies the DELTAs that concern its CHANGE ONLY files and reports them. Before sending such a prompt, the candidate runs `grep -nE '^([-*] )?DELTA:' PLAN.md`; a DELTA that changes an expected value or a test case is first written into the prompt's test list (a scope change, not a test edit). The practice brief needs no DELTA, so `grep` finds none, or only `DELTA: none` lines.
+
 ### 3.3 Shell variables for Verify blocks
 
-`BRIEF` and `DATA_DIR` are exported in Human step 0.a. The two sample ids are exported in Human step 0.b, once DATA_PROFILE.md shows real ids. Re-export all four in each new terminal. On the day, only the values change.
+`T0` (the session clock), the helpers `m` and `ailog`, `BRIEF`, `DATA_DIR` and the libpq variables are set in Human step 0.a (the helpers need no uv, and Human step 0.b already logs P0.1 with `ailog`); the two sample ids in Human step 0.b, once DATA_PROFILE.md shows real ids; `gate` in Human step 1.a. In each new terminal, re-run all of them: keep them in a file outside the repo, `~/session.sh` (Human step 0.a's first line starts it with `T0`), and `source` it. On the day, only the values change.
 
 ```bash
+export T0=$(date +%s); echo "export T0=$T0" >> ~/session.sh   # Human step 0.a, first line: tripwire minutes count from here
 export BRIEF=INSTRUCTIONS.md DATA_DIR=data          # Human step 0.a
+export PGHOST=localhost PGPORT=5432 PGUSER=gis PGPASSWORD=gis PGDATABASE=gis TEST_DB=gis_test   # Human step 0.a: the brief's database values
 export SAMPLE_TRJ=FLT-1003 SAMPLE_ZONE=ZN-POLE       # Human step 0.b, ids taken from DATA_PROFILE.md
+m() { echo $(( ($(date +%s) - T0) / 60 )); }        # elapsed minutes, for tripwires and the AI_LOG min column
+ailog() { [ $# -eq 5 ] || { echo "usage: ailog PROMPT MODEL ASK VERIFIED_BY OUTCOME"; return 1; }; printf '| %s | %s | %s | %s | %s | %s |\n' "$(m)" "$@" >> AI_LOG.md; }
 ```
 
-Verify blocks write `"$BRIEF"`, `"$DATA_DIR"`, `"/trajectories/$SAMPLE_TRJ"` and `"/zones/$SAMPLE_ZONE"`. Expected results in comments are practice values.
+libpq reads the `PG*` variables, so `pg_isready`, `psql` and `createdb` need no credentials on their command lines (Human step 0.a, Appendices C and D); the SQLAlchemy URLs stay explicit and are unaffected. Verified: `ailog` appends one row with the elapsed minute and refuses any argument count but 5.
+
+Verify blocks write `"$BRIEF"`, `"$DATA_DIR"`, `"/trajectories/$SAMPLE_TRJ"` and `"/zones/$SAMPLE_ZONE"`. Expected results in comments are practice values. If the brief mandates other URL paths, the candidate edits the paths in the Verify lines too (Appendix E.2).
 
 Shell variables never reach committed files, because a grader's shell does not have them:
-- NOTES.md and README.md carry literal ids (P7.3 gets `<SAMPLE_TRJ=FLT-1003>`);
-- `scripts/verify.sh` defaults to its argument, then `$DATA_DIR`, then the `<DATA_DIR=data>` value written into it by P7.2.
+
+- NOTES.md and README.md carry literal ids (P7.3 gets `<SAMPLE_TRJ=FLT-1003>` and writes its value);
+- `scripts/verify.sh` defaults to its argument, then `$DATA_DIR`, then the `DATA_DIR` value that P7.2 writes into it (the file holds `data`, never the `<DATA_DIR=…>` token; Verify 7 greps for leftover tokens).
 
 ## 4. Time budget
 
@@ -197,17 +255,17 @@ Shell variables never reach committed files, because a grader's shell does not h
 
 | Phase | Title | Start–end | Min | Steps inside the phase (H = human, no AI) |
 |---|---|---|---|---|
-| 0 | Orient and plan | 0–15 | 15 | H0.a env check, read brief (0–5) · P0.1 S profiler (5–8) · H0.b landmark check + PLAN skeleton (8–10) · P0.2 L PLAN.md (10–13) · review + checkpoint (13–15) |
-| 1 | Project setup | 15–30 | 15 | H1.a uv init/add, pyproject block, `.env` (15–19) · P1.1 S skeleton (19–27) · verify + checkpoint (27–30) |
+| 0 | Orient and plan | 0–15 | 15 | H0.a first lines (clock, helpers, exports, `ls`) + P0.1 S profiler sent (0–1) · H0.a rest: read the brief, env check, while P0.1 runs (1–6) · H0.b landmark check + PLAN skeleton + AI log (6–8) · P0.2 L PLAN.md (8–12; compare DATA_PROFILE.md with the brief while it runs) · Verify 0 + 2-min review + checkpoint (12–15) |
+| 1 | Project setup | 15–30 | 15 | H1.a uv init/add, pyproject block, `.env`, `gate` (15–19) · P1.1 S skeleton (19–27) · verify + checkpoint (27–30) |
 | 2 | Database models and migrations | 30–48 | 18 | H2.a alembic init (30–31) · P2.1 L models, env.py, conftest, migration tests; `gate lint` (31–40) · H2.b autogenerate 0001, ruff format, review, full gate + commit (40–46) · verify + checkpoint (46–48) |
 | 3 | JSON ingestion | 48–73 | 25 | P3.1 L records + unit tests (48–58) · P3.2 L service, CLI, DB tests (58–70) · verify + checkpoint (70–73) |
-| 4 | Read-only API | 73–93 | 20 | P4.1 L trajectories pattern (73–84) · P4.2 S zones copy (84–90) · verify + checkpoint (90–93) |
-| 5 | Structured logging | 93–103 | 10 | P5.1 S logging + middleware + tests (93–100) · verify + checkpoint (100–103) |
-| 6 | Geospatial analysis | 103–153 | 50 | P6.1 L geodesy + analytic tests (103–118) · P6.2 S oracle tests (118–124) · P6.3 S analysis models; `gate lint` (124–127) · H6.a autogenerate 0002, ruff format, review, full gate + commit (127–131) · P6.4 L runner + CLI + tests (131–143) · P6.5 L API exposure (143–151) · verify + checkpoint (151–153) |
-| 7 | Tests and verification | 153–170 | 17 | P7.1 S check_invariants.py (153–157) · P7.2 S smoke.py + verify.sh; the human's `verify.sh` run is saved for P7.3 (157–163) · P7.3 S README + NOTES from that saved output (163–167) · verify.sh + checkpoint (167–170) |
-| — | Buffer | 170–180 | 10 | Final `verify.sh`, demo rehearsal (Appendix G), push. Spend it only after 170; earlier overruns trigger tripwires or cuts, not buffer. P7.4 (optional review) is not scheduled: it runs only on time saved earlier |
+| 4 | Read-only API | 73–90 | 17 | P4.1 L trajectories pattern (73–82) · P4.2 S zones copy (82–87) · verify + checkpoint (87–90) |
+| 5 | Structured logging | 90–100 | 10 | P5.1 S logging + middleware + tests (90–97) · verify + checkpoint (97–100) |
+| 6 | Geospatial analysis | 100–153 | 53 | P6.1 L geodesy + analytic tests (100–115) · P6.2 L oracle tests (115–121) · P6.3 S analysis models; `gate lint` (121–124) · H6.a autogenerate 0002, ruff format, review, full gate + commit (124–130) · P6.4 L runner + CLI + tests (130–142) · P6.5 L API exposure (142–150) · verify + checkpoint (150–153) |
+| 7 | Tests and verification | 153–172 | 19 | P7.1 S check_invariants.py (153–157) · P7.2 S smoke.py + verify.sh (157–161) · H7.a one `verify.sh` run + reason-code counts, saved for P7.3 (161–163) · P7.3 S README + NOTES from that saved output, then the 2-min claim check (163–169) · Verify 7 + checkpoint (169–172) |
+| — | Buffer | 172–180 | 8 | Demo rehearsal (Appendix G) and push; a final `verify.sh` only if code changed after H7.a. Spend it only after 172; earlier overruns trigger tripwires or cuts, not buffer. P7.4 (optional review) is not scheduled: it runs only on time saved earlier |
 
-Check: 15 + 15 + 18 + 25 + 20 + 10 + 50 + 17 + 10 = 180. Phase 6 gets 50 minutes because it is the graded differentiator and the main source of silent bugs. Its five gate commits group into the geo proposal's split:
+Check: 15 + 15 + 18 + 25 + 17 + 10 + 53 + 19 + 8 = 180. The Step A critique (coverage §2) estimated the realistic need per phase; this table moves 3 minutes from Phase 4 (realistic 13–18) to Phase 6 (realistic 40–60) and 2 from the buffer to Phase 7, and starts the profiler before the reading. `verify.sh` runs once in Phase 7 (Human step 7.a): P7.2's DONE WHEN only parses it and runs `smoke.py`, and Verify 7 reads the saved tail. Phase 6 gets 53 minutes because it is the graded differentiator and the main source of silent bugs. Its five gate commits group into the geo proposal's split:
 - 6a, math: P6.1, P6.2;
 - 6b, persistence: P6.3 committed with H6.a, then P6.4;
 - 6c, API: P6.5.
@@ -216,57 +274,102 @@ Check: 15 + 15 + 18 + 25 + 20 + 10 + 50 + 17 + 10 = 180. Phase 6 gets 50 minutes
 
 | Min | Check | Action if it fails |
 |---|---|---|
-| 10 | Postgres reachable with the brief's credentials | Use SQLite now (Appendix D: two `.env` lines) |
+| 10 | Postgres reachable with the brief's credentials | Server up but the database missing: `createdb` it (Appendix D) and rerun the check. No server: SQLite now (Appendix D: two `.env` lines) |
 | 15 | PLAN.md committed | Commit it as is; park doubts in PLAN §10 |
 | 27 | **SQLite switch:** `/health` reports `"database":"ok"` | Write the SQLite `.env` lines; rerun Verify 1 |
-| 47 | 0001 applied and `alembic check` clean (H2.b is scheduled to end at 46) | Hand-fix the file using the §6.c checklist (it is usually item 2 or 5); defer `test_round_trip` |
-| 58 | **Full-refresh decision**, before sending P3.2: P3.1 green (`tests/test_records.py` 16 passed) | Send P3.2 in its full-refresh variant (cut 8) |
-| 73 | Second run is a no-op (inserted 0, updated 0) and stores no duplicate rows | Duplicate rows or a failed run: send Verify 3's "If it fails" prompt. Otherwise (for example `updated 20`) ship it, apply cut 8's "Also change" lines to `verify.sh` and NOTES, and note it in NOTES "Known limitations" |
-| 90 | Trajectory list/detail/404/422 tests green | Skip P4.2 (zone endpoints; zone passes still show in trajectory detail). Also remove smoke check f (`SMOKE OK (7 checks)`), the zone checks of Verify 4 and 6, and P6.5's `test_zone_detail_passes`. Phase 4 then expects 6 passed (suite 33); later suites are 2 lower, and from Phase 6 on 3 lower |
+| 47 | 0001 applied and `alembic check` clean (H2.b is scheduled to end at 46) | Hand-fix the file with the §6.c review checklist (usually item 2, 5 or 7). Never defer: the test session fixture and `verify.sh` both downgrade to base, so a broken `downgrade()` blocks every DB test. If the fix needs more than 5 lines, delete the file, fix the model, regenerate |
+| 58 | **Insert-only decision**, before sending P3.2: P3.1 green (`tests/test_records.py` 16 passed in practice, or the item count of the day's edited list) | P3.1 red: send P3.1's follow-up once (same chat); send P3.2 only when `tests/test_records.py` is green, and then in its cut-8 (insert-only) variant whatever the time |
+| 73 | Second run is a no-op (inserted 0, updated 0) and stores no duplicate rows | Duplicate rows or a failed run: send Verify 3's "If it fails" prompt. `updated N > 0`: the stored hash differs from the recomputed one (non-canonical JSON); give it 3 minutes, then take insert-only cut 8, sending its P3.2 variant text as a fix prompt for `ingest.py` and `test_ingest.py` |
+| 87 | Trajectory list/detail/404/422 tests green (P4.1 is scheduled to end at 82) | If PLAN §2 requires zone endpoints (practice: R3 does), never skip P4.2: send it as soon as P4.1 is green and recover the minutes from the next cuts (§4.3). Otherwise skip P4.2 (zone endpoints; zone passes still show in trajectory detail), and also remove smoke check f (`SMOKE OK (7 checks)`), the zone checks of Verify 4 and 6, and P6.5's `test_zone_detail_passes`. Phase 4 then expects 6 passed (suite 33); later suites are 2 lower, and from Phase 6 on 3 lower |
 | 105 | **Analysis must have started** | Start P6.1 now; Phase 5 keeps only what is green (basic JSON logs + middleware) |
-| 120 | `tests/test_geodesy.py` green | Cut 7 (overlap handling and touch band). Never drop T1–T4 (except T3's 3-D clause under cut 6), T6–T9 or the crossing cases of T10/T11 |
-| 135 | P6.4 started | Persist metrics and passes first, then intersections (never cut); take the time from the cuts still ahead (1 and 4, then 10) |
-| 152 | Analysis fields visible in `GET /trajectories/{id}` (P6.5 is scheduled to end at 151) | Finish the trajectory detail first (`analysis`, `zone_passes`, `intersections`; never cut); drop the unfinished zone part (aggregates and `ZoneDetail.passes`, cut 1's scope) |
-| 165 | **Feature freeze:** `bash scripts/verify.sh` ends `VERIFY OK` | Fix only the failing step; README becomes 20 lines (cut 10's scope) |
+| 120 | `tests/test_geodesy.py` green | Cut 7 (overlap handling and touch band) with its §4.3 hand edit. When the brief defines touch or overlap, as the practice brief does, it costs a stated requirement: NOTES "Known limitations" names it. Never drop T1–T4 (except T3's 3-D clause under cut 6), T6–T9 or the crossing cases of T10/T11 |
+| 135 | P6.4 started (scheduled at 130) | Send P6.4 now, unchanged, and take cuts 1 (at P6.5), 4 (skip P7.1) and 10 (at P7.3): about 8 minutes |
+| 152 | Analysis fields visible in `GET /trajectories/{id}` (P6.5 is scheduled to end at 150) | Finish the trajectory detail first (`analysis`, `zone_passes`, `intersections`; never cut); drop the unfinished zone part (aggregates and `ZoneDetail.passes`, cut 1's scope) |
+| 165 | **Feature freeze:** `bash scripts/verify.sh` ends `VERIFY OK` (Human step 7.a's run) | Fix only the failing step; README becomes 20 lines (cut 10's scope) |
 | 177 | Final commit made | Commit and push now |
 
-Two more triggers:
-- **Calibration at minute 30:** if P0.1 or P1.1 needed a retry, P5.1 and P6.2 move to the large model.
+The minutes are read with `m` (§3.3), which counts from `T0`. Two more triggers:
+
+- **Calibration at minute 30:** if P0.1 or P1.1 needed a retry, P5.1 moves to the large model (P6.2 already runs there).
 - **Token tripwire:** see §5.3.
+
+On the day, Verify 0's review marks every cut and tripwire skip that would remove a requirement of PLAN §2 as a last resort (§4.3).
 
 ### 4.3 Cut list (cheapest loss first; minutes saved)
 
 **Rules:**
-- When behind, apply the first cut whose "Decide by" minute is still ahead. A cut decided after its minute saves nothing, because that prompt has already been sent; skip it and take the next one.
+
+- When behind, apply the first cut whose "Decide by" minute is still ahead and that is not a last resort. A cut decided after its minute saves nothing, because that prompt has already been sent; skip it and take the next one.
 - Make the cut's "Also change" edits before sending the affected prompt. Removing a case from a prompt's test list before the prompt is sent is a scope change, not a test edit.
-- Cut 7 is the one exception. It is applied at its tripwire (minute 120), so it removes cases already written in `tests/test_geodesy.py`; the human deletes them by hand, and NOTES "Known limitations" says so.
+- Cut 7 is the one exception. It is applied at its tripwire (minute 120), after `tests/test_geodesy.py` exists, so the human makes its 3-line code edit and deletes the cases by hand, and NOTES "Known limitations" says so.
+- **Last resorts.** A cut that removes a requirement the brief states is taken only at its tripwire or when nothing else is left, and NOTES "Known limitations" names the requirement it costs. Practice: cut 7 (the brief defines touch and overlap) and cut 9 (the brief asks to report what was skipped and why), which therefore sits last. On the day, Verify 0's review checks every cut and tripwire skip against PLAN §2 (cut 6 if altitude or 3-D length is required; cut 7 if touch or overlap is defined; cut 9 if stored rejection reports are required; the tripwire-87 skip of P4.2 if zone endpoints are required), records the last resorts in PLAN §10, and recounts the minutes the other cuts give.
+- Savings are realistic estimates (Step A coverage critique §2): a cut that trims lines inside a large prompt saves little, because reading, test runs and the gate dominate a prompt's minutes.
 - P7.4 (the optional large review) is not on this list. It is unscheduled and runs only on time saved earlier, so skipping it saves nothing.
 
 | # | Cut | Saves | Decide by (min) | Also change |
 |---|---|---|---|---|
-| 1 | Zone `analysis` aggregates (`pass_count`, `trajectory_count`) | 3 | 143 (P6.5) | P6.5 leaves zone `analysis` null; `test_zone_detail_passes` keeps only its 2-passes assert; Verify 6 drops the ZN-BAFFIN `pass_count` check |
-| 2 | `started_after` / `started_before` list filters | 4 | 73 (P4.1) | P4.1 drops `test_started_filters`: P4.1 expects 5 passed, Phase 4 7 (suite 34), then 37 and ≥ 62 |
-| 3 | `stale` flag and `input_hash` | 3 | 124 (P6.3) | P6.3 omits `input_hash`; P6.5 removes `stale` from `TrajectoryAnalysisOut`; P7.1's check 7 drops its stale clause |
+| 1 | Zone `analysis` aggregates (`pass_count`, `trajectory_count`) | 2 | 142 (P6.5) | P6.5 leaves zone `analysis` null; `test_zone_detail_passes` keeps only its 2-passes assert; Verify 6 drops the ZN-BAFFIN `pass_count` check |
+| 2 | `started_after` / `started_before` list filters | 2 | 73 (P4.1) | P4.1 drops `test_started_filters`: P4.1 expects 5 passed, Phase 4 7 (suite 34), then 37 and ≥ 62 |
+| 3 | `stale` flag and `input_hash` | 1 | 121 (P6.3) | P6.3 omits `input_hash`; P6.5 removes `stale` from `TrajectoryAnalysisOut`; P7.1's check 7 drops its stale clause |
 | 4 | `scripts/check_invariants.py` (P7.1) | 4 | 153 (P7.1) | P7.2's `verify.sh` has no invariants step; Verify 7 and NOTES drop `INVARIANTS OK` |
-| 5 | P6.2 oracle tests (the analytic table stays) | 6 | 118 (P6.2) | Phase 6 expects ≥ 56; Verify 6 runs only `tests/test_geodesy.py`; NOTES' geo row cites the analytic table only |
-| 6 | `length_3d_km` and altitudes at events (the nullable columns and fields stay, null) | 4 | 103 (P6.1) | Remove T3's `path_length_3d_km` clause from P6.1's table before sending it; P6.5's tests drop their altitude asserts |
-| 7 | Overlap handling and the ±1 m touch band (co-linear segment pairs are skipped and counted in the log) | 5 | 120 (tripwire) | Drop T5's touch case, the overlap cases of T10/T11 and `test_overlap_pair` (Phase 6 expects ≥ 62). Analyze then reports 7 intersections: X1's two overlap rows are gone. S7 becomes a crossing pass of about 0.02 km, so Verify 6 drops its `"kind":"touch"` check. The hand deletion is its own commit (`cut 7: …`), so Verify 6's `git log` count for `tests/test_geodesy.py` becomes 2 |
-| 8 | Hash-based change detection → full-refresh ingestion | 8 | 58 (P3.2) | P3.2 variant: in the run's one transaction, delete all stored trajectories and zones (points and analysis rows cascade), then insert every valid record. No preload, no hash comparison, no update path, so a run must include every file, as the default `data` does. Run 2 reports inserted 20 (Verify 3). P3.2's three re-run tests assert stored rows and row counts instead of updated/unchanged. P7.2's `verify.sh` ingest-2 step asserts `status` plus unchanged `gisdb stats` entity counts. NOTES "Known limitations" |
-| 9 | `ingest_rejections` table → reason codes only in logs and counts | 5 | 31 (P2.1) | P2.1 omits the model, so 0001 has 4 tables (checklist item 3 says 4); P3.2 logs each rejection and its tests assert counts, not rows; `gisdb stats` lists no `ingest_rejections` |
-| 10 | README cut to 20 lines; NOTES keeps only the evidence map | 2 | 163 (P7.3) | Verify 7 expects README ≤ 20 and NOTES ≤ 20 lines |
+| 5 | P6.2 oracle tests (the analytic table stays) | 6 | 115 (P6.2) | Phase 6 expects ≥ 56 (the P6.5 gate tail); NOTES' geo row cites the analytic table only |
+| 6 | `length_3d_km` and altitudes at events (the nullable columns and fields stay, null) | 1 | 100 (P6.1) | Remove T3's `path_length_3d_km` clause from P6.1's table before sending it; P6.5's tests drop their altitude asserts |
+| 7 | Overlap handling and the ±1 m touch band. Last resort when the brief defines touch or overlap (practice: it does) | 5 | 120 (tripwire) | Hand-edit `src/gisdb/geodesy.py` (3 lines): in `segment_circle_interval` change `xt > rho + TOL_RAD` to `xt > rho` and delete the tangent-band branch `if xt >= rho - TOL_RAD:`; in `segment_intersections` make the co-linear branch `return []`. Then delete T5's touch case, the overlap cases of T10/T11 and `test_overlap_pair` (Phase 6 expects ≥ 62), and commit both together (`cut 7: drop overlap and touch band`), so Verify 6's `git log` count for `tests/test_geodesy.py` becomes 2. Analyze then reports 7 intersections (X1's two overlap rows are gone) and S7 becomes a crossing pass of 0.019 km, so Verify 6 drops its `"kind":"touch"` check (verified on the practice data by the Step A coverage critic: zone_passes 14, intersections 7) |
+| 8 | Insert-only ingestion: an existing key is never rewritten (a changed record counts as unchanged, so a changed redelivery is not applied) | 3 | 58 (P3.2) | P3.2 variant: drop step 3c's "Hash differs" branch (such a record counts as unchanged) and step 4 (point replacement); `test_changed_record_updates` expects updated 0, unchanged 5 and the stored callsign unchanged; NOTES "Known limitations". Run 2, Verify 3 and `verify.sh` are unchanged |
+| 10 | README cut to 20 lines; NOTES keeps only the evidence map | 2 | 163 (P7.3) | README keeps the quickstart, at most 3 assumptions with a link to PLAN §10, and a 4-line "## AI usage" section; Verify 7 expects README ≤ 20 and NOTES ≤ 20 lines |
+| 9 | `ingest_rejections` table → reason codes only in logs and counts. Last resort: the brief asks to report what was skipped and why | 2 | 31 (P2.1) | P2.1 omits the model, so 0001 has 4 tables (checklist item 3 says 4); P3.2 logs each rejection and its tests assert counts, not rows; `gisdb stats` lists no `ingest_rejections` |
 
-Total: 44 minutes. 23 of them are still available after minute 105 (cuts 1, 3, 4, 5, 7 and 10).
+Total: 28 minutes. 20 of them are still available after minute 105 (cuts 1, 3, 4, 5, 7 and 10; cut 7 is a last resort in practice).
 
 ### 4.4 Never cut
 
 - Migrations 0001 and 0002 through Alembic, reviewed (`Reviewed:` line).
-- Idempotent ingestion with run accounting: re-running on unchanged files leaves the same rows and never duplicates them. With hash detection (the default; cut 8 removes it), run 2 reports inserted 0 and updated 0.
-- Trajectory list and detail with pagination, 404 and 422.
+- Idempotent ingestion with run accounting: re-running on unchanged files writes no data row and never duplicates one, so run 2 reports inserted 0 and updated 0, with or without cut 8 (insert-only).
+- Trajectory list and detail with pagination, 404 and 422; zone list and detail when PLAN §2 requires them (practice: R3).
 - JSON logs with `request_id` and the `X-Request-ID` header.
 - Great-circle length, zone entry/exit with interpolated times, and trajectory crossings: persisted and returned by the API.
 - The analytic geo tests: T1–T11, minus the cases that cuts 6 and 7 remove.
 - `scripts/verify.sh` → `VERIFY OK`.
+- A README with the parts the brief names (practice R7: how to run, assumptions, how AI was used).
 - A green commit per phase and `AI_LOG.md`.
+
+### 4.5 Run sheet (the top of the playbook; minutes from `T0`)
+
+| Min | Step | Do | Done when |
+|---|---|---|---|
+| 0 | H0.a, first five lines | `export T0…`, the helpers `m` and `ailog`, the exports, `ls "$DATA_DIR"` | data directory known |
+| 1 | P0.1 S | new small chat: kickoff header + Prompt 0.1 in one message | one `##` heading per data file |
+| 1–6 | H0.a, rest | read the brief; ask about prepared templates; env check; tripwire 10 | DB decision made |
+| 6 | H0.b | profile, landmark, PLAN skeleton, AI log; commit P0.1 | 11 headings |
+| 8 | P0.2 L | new large chat; compare the profile with the brief while it runs | 11 headings |
+| 12 | V0, C0 | Verify 0, 2-minute review (DELTAs, last-resort cuts), checkpoint | committed by 15 |
+| 15 | H1.a | uv, tool block, `.env`, `gate`; commit `[human]` | `no authors` |
+| 19 | P1.1 S | new small chat; day-of edits of P2.1 and P3.1 while it runs | 1 passed |
+| 27 | V1, C1 | tripwire 27 (SQLite?); calibration at 30 | `/health` ok |
+| 30 | H2.a, P2.1 L | cut 9 (last resort) decided at 31; day-of edits of P3.2, P4.1, P4.2 while it runs | `gate lint` clean |
+| 40 | H2.b | 0001: generate, review, gate, log, commit | 5 passed |
+| 46 | V2, C2 | tripwire 47 | `0001 (head)` |
+| 48 | P3.1 L | new large chat; day-of edits of Phase 6 prompts while P3.x run | 16 passed |
+| 58 | P3.2 L | tripwire 58 / cut 8 first | 27 passed |
+| 70 | V3, C3 | tripwire 73 | run 2 a no-op |
+| 73 | P4.1 L | cut 2 decided; day-of edits of P7.2 and P7.3 while it runs | 6 passed |
+| 82 | P4.2 S | tripwire 87 | 8 passed |
+| 87 | V4, C4 | | suite 35 |
+| 90 | P5.1 S (L after calibration) | | 3 passed |
+| 97 | V5, C5 | | suite 38 |
+| 100 | P6.1 L | cut 6 decided; tripwire 105 | at least 11 passed |
+| 115 | P6.2 L | cut 5 decided; tripwire 120 (cut 7?) | 7 passed |
+| 121 | P6.3 S | cut 3 decided | `gate lint` clean |
+| 124 | H6.a | 0002: generate, review, gate, log, commit | at least 56 passed |
+| 130 | P6.4 L | tripwire 135 | 4 passed |
+| 142 | P6.5 L | cut 1 decided | at least 63 passed |
+| 150 | V6, C6 | tripwire 152 | 14 / 9 |
+| 153 | P7.1 S | cut 4 decided | `INVARIANTS OK` |
+| 157 | P7.2 S | | `SMOKE OK (8 checks)` |
+| 161 | H7.a | `verify.sh` once, saved; reason codes; tripwire 165 | `VERIFY OK` |
+| 163 | P7.3 S | cut 10 decided; 2-minute claim check | at most 120 / 80 lines; `## AI usage` |
+| 169 | V7, C7 | | clean tree |
+| 172 | Buffer | demo rehearsal, push; tripwire 177 | pushed |
 
 ## 5. Model routing and AI habits
 
@@ -284,7 +387,7 @@ Total: 44 minutes. 23 of them are still available after minute 105 (cuts 1, 3, 4
 | P4.2 | Zone endpoints copying P4.1 + tests | small | Pattern copy, tests catch drift |
 | P5.1 | Structured logging, request IDs, JSON 500 + tests | small | Known recipe given verbatim; escalate on the first failure |
 | P6.1 | Geodesy core + analytic tests T1–T11 | large | Numerically subtle; the prompt is the spec |
-| P6.2 | Property + geographiclib oracle tests | small | Mechanical recipe; value lies in independence |
+| P6.2 | Property + geographiclib oracle tests | large | Numerically subtle oracle (sampling, bisection, a signed skip rule found only by running it); a small-model failure after minute 115 costs more minutes than the large model's tokens |
 | P6.3 | Analysis result models | small | Exact column list copying the 0001 style |
 | P6.4 | Analysis runner, `analyze` CLI, tests | large | Orchestration, transactions, interpolation |
 | P6.5 | Analysis in the API + tests | large | Joins, perspective flip, no N+1 |
@@ -304,11 +407,11 @@ Total: 44 minutes. 23 of them are still available after minute 105 (cuts 1, 3, 4
 
 ### 5.3 Token rules
 
-- A fresh chat per phase, opened with the kickoff header (§5.4).
-- Only `DATA_PROFILE.md` reaches the models, never raw `data/*.json`.
+- A fresh chat per phase, opened with the kickoff header (§5.4), pasted in one message with the chat's first prompt.
+- Only `DATA_PROFILE.md` reaches the models, never the raw data files (PLAN §3 lists them).
 - Paste only the failing tail (≤ 20 lines). Ask for terse replies.
-- **Tripwire:** stop and narrow a prompt that passes about 300k tokens or about 15 tool calls.
-- **Expected spend:** small 9 × 20–60k plus large 9 × 60–200k, plus 50% for retries. That is roughly 1.1–3.5M tokens ((0.18–0.54M + 0.54–1.8M) × 1.5), well inside 10–20M.
+- **Expected spend:** an agent re-sends its context on every tool call, so a prompt costs about context × tool calls: small 50–150k, large 150–400k. 8 small and 9 large prompts give about 1.8–4.8M, plus 50% for retries about 3–7M, inside 10–20M.
+- **Tripwire:** a prompt that runs past about twice its normal range has stopped converging: about 15 tool calls (or 300k tokens) on the small model, about 20 tool calls (or 600k tokens) on the large one. Stop it and narrow it (recovery R6).
 
 ### 5.4 Prompt contract, kickoff header, gate
 
@@ -320,50 +423,63 @@ READ: <files and PLAN.md sections>
 CHANGE ONLY: <exact file list>
 TASK:
 1. <numbered steps with exact names, signatures, library calls; never "appropriate", "robust", "etc.">
+N. DELTA lines: apply every line of PLAN.md §<k> that starts with "DELTA:" and concerns a CHANGE ONLY file; a DELTA overrides the defaults above (columns, validation rules, fields, names, units). Reply with the DELTAs you applied, or "no DELTA".
 DONE WHEN: <command> -> <expected output>
 Agent rules: follow PLAN.md §1 Conventions. Change only the CHANGE ONLY files. Never edit tests to make them pass. Never run git. Reply with the changed files and the last 15 lines of any command you ran.
 ```
 
-**Kickoff header**, pasted as the first message of each phase's fresh chat:
+The DELTA item is the last TASK item of the prompts that read PLAN §3–§8, with these sections: P2.1 (§3, §4), P3.1 (§3, §5), P3.2 (§5, §7), P4.1 and P4.2 (§6), P6.3 (§4), P6.4 (§7, §8) and P6.5 (§6, §8). In practice it is a no-op. P0.1 runs before PLAN.md exists: its READ line says so, which is why the kickoff header reads PLAN.md only "if PLAN.md exists".
+
+**Kickoff header**, pasted at the top of each fresh chat's first message, together with that chat's first prompt:
 
 ```text
-Context: a timed build of a Python API service in this repo. First read PLAN.md §1 Conventions and §11 Status, then only the files a prompt lists under READ. Never list directories recursively; never open .venv/, uv.lock or data/*.json. Keep replies terse: changed files plus the last 15 lines of any command output. If you cannot run commands, give me the exact commands to run. Wait for my first prompt.
+Context: a timed build of a Python API service in this repo. First read PLAN.md §1 Conventions and §11 Status if PLAN.md exists, then only the files a prompt lists under READ. Never list directories recursively; never open .venv/, uv.lock or the provided data files (PLAN.md §3 lists them; DATA_PROFILE.md describes them). Keep replies terse: changed files plus the last 15 lines of any command output. If you cannot run commands, give me the exact commands to run. The first prompt follows.
 ```
 
-**Gate after every prompt (~60 s).** Paste the `gate` function once per terminal (Human step 1.a):
+**Gate after every prompt (~60 s).** The `gate` function is pasted once per terminal in Human step 1.a (the playbook keeps that one copy; Session setup points to it). Do not run it before P1.1: until P1.1 replaces uv's template `src/gisdb/__init__.py`, ruff fails on its `print` (T201).
 
 ```bash
 gate() {   # "gate lint" skips pytest: used after P2.1 and P6.3, before the human step creates the migration
   git status --short && git diff --stat
+  local rc=0 hits
   hits=$(grep -rnE "session\.query\(|declarative_base|orm_mode|class Config:|@validator|@root_validator|parse_obj|from pydantic import BaseSettings|AsyncSession|create_async_engine|asyncpg|aiosqlite|func\.now\(\)|text\('now\(\)'\)|on_event\(|postgresql://|psycopg2|utcnow" src tests migrations scripts 2>/dev/null)
-  if [ -n "$hits" ]; then printf '%s\n' "$hits"; echo "FORBIDDEN API FOUND"; else echo "conventions grep clean"; fi
+  if [ -n "$hits" ]; then printf '%s\n' "$hits"; echo "FORBIDDEN API FOUND"; rc=1; else echo "conventions grep clean"; fi
+  hits=$(grep -rnE '<[A-Z][A-Z_]+=' src tests migrations scripts 2>/dev/null)
+  if [ -n "$hits" ]; then printf '%s\n' "$hits"; echo "PLACEHOLDER LEFT"; rc=1; fi
   uv run ruff format -q . && uv run ruff check --fix -q . || return 1
-  [ "${1:-}" = lint ] || uv run pytest -q -x 2>&1 | tail -n 15
+  [ "${1:-}" = lint ] && return "$rc"
+  timeout 120 uv run pytest -q -x 2>&1 | tail -n 15
+  [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
+  return "$rc"
 }
 ```
 
-The grep result is captured, not tested by exit status. GNU grep exits 2 when a listed directory is missing (`migrations/` until Human step 2.a), even after printing a match, and `&& … || echo clean` would then report "clean" over a forbidden API. Verified with bash and a stubbed `uv`.
+The grep results are captured, not tested by exit status. GNU grep exits 2 when a listed directory is missing (`migrations/` until Human step 2.a), even after printing a match, and `&& … || echo clean` would then report "clean" over a forbidden API. The function returns non-zero on a forbidden API, a leftover `<NAME=` token, a ruff failure or a pytest failure (pytest's own status, read from `PIPESTATUS`), so `gate && …` never commits red. Verified with bash and a stubbed `uv`: clean 0, lint mode 0, pytest failing 1, ruff failing 1, forbidden API 1 (also in lint mode), leftover token 1, and no match on ordinary comparisons such as `a < b`.
 
 Gate steps:
+
+0. Before sending a prompt: make its day-of edits (Appendix E.1), and run `grep -nE '^([-*] )?DELTA:' PLAN.md`. If a DELTA changes an expected value or a test case, edit the prompt's test list first (a scope change, not a test edit).
 1. Run `gate`. Restore any file the agent changed outside CHANGE ONLY (`git restore <file>`, delete stray new files). Keep the formatting-only changes that the gate's own `ruff format` / `--fix` made.
 2. If the gate or the DONE WHEN fails, stage everything (`git add -A`) first, then send the "If it fails" prompt. Afterwards `git diff --stat -- tests/` shows only what the fix changed. It must be empty, or touch only the test file that the failing prompt itself created, never an expected value. Test files of earlier prompts (the human-owned values in `test_records`, `test_ingest`, `test_api`, `test_geodesy`, `test_analysis`) never change.
-3. Append the AI_LOG.md row.
-4. Commit with `git add -A && git commit -qm "P<N>.<k>: <what> [AI: <small|large>]"`.
+3. Read the gate output, then run the prompt's "After" line, which appends the AI_LOG.md row and commits in one go: `ailog <id> <small|large> "<ask>" "<verified by>" <outcome> && git add -A && git commit -qm "P<N>.<k>: <what> [AI: <small|large>]"`. Each prompt in the playbook ends with its own two-line "After" block: `gate`, then that line with its values filled in.
 
 **Exceptions:**
+
 - **Phase 0:** before `uv init` exists, the gate is only `git status --short` and the commit.
 - **P2.1 and P6.3:** run `gate lint`; pytest stays red until Human step 2.b / 6.a has generated and applied the migration. Until then the new tables do not exist: `test_no_drift` fails, and every DB test errors in the `db` fixture. The full `gate`, the AI_LOG row and one commit follow that human step, for example `P2.1: models, env.py, fixtures; 0001 reviewed [AI: large]`.
 
 ### 5.5 AI-usage log and commit tags
 
-`AI_LOG.md` at the repo root, created in Human step 0.b:
+`AI_LOG.md` at the repo root, created in Human step 0.b with its header; every row is appended with `ailog` (§3.3), which writes the elapsed minute itself:
 
 ```text
 # AI usage log
 | min | prompt | model | ask | verified by | outcome |
 |---|---|---|---|---|---|
-| 07 | P0.1 | small | stdlib data profiler | ran it; coord ranges prove [lon, lat] | accepted |
+| 7 | P0.1 | small | stdlib data profiler | ran it; coordinate order proven by a landmark | accepted |
 ```
+
+The P0.1 row above comes from `ailog P0.1 small "stdlib data profiler" "ran it; coordinate order proven by a landmark" accepted`.
 
 - `outcome` is one of: `accepted`, `accepted + hand fix (N lines)`, `retried`, `escalated to large`, `replaced by hand`.
 - Per-prompt commit tag: `[AI: small]` or `[AI: large]`.
@@ -371,9 +487,10 @@ Gate steps:
 
 ### 5.6 Human-only steps (never delegated)
 
-- Reading the brief.
+- Reading the brief, and asking the interviewer, unless it is already settled, whether prepared prompt templates and a checklist (no code) may be used.
 - The environment check and the DB decision.
 - The coordinate-order landmark check.
+- The day-of edits of prompts before sending them (Appendix E.1).
 - Pasting the PLAN.md skeleton and Conventions; the 2-minute PLAN.md review by direct edit.
 - `uv init` and `uv add`; the pyproject tool block; `.gitignore` lines; `.env`.
 - `alembic init`; `alembic revision --autogenerate`; `ruff format` on the new migration; migration review and the `Reviewed:` line.
@@ -385,7 +502,7 @@ Gate steps:
 ### 5.7 Conventions block (PLAN.md §1, pasted verbatim)
 
 ```text
-- Tokens written <NAME=value> in a prompt mean: use value.
+- Tokens written <NAME=value> in a prompt mean: use value. If PLAN.md §3 "Placeholder values" gives NAME a different value, use PLAN's value and say so in your reply.
 - Stack: Python 3.12, code stays 3.11-compatible (no `type X = ...`, no `class C[T]`); uv only (`uv add`, `uv run`; never pip, never requirements.txt); FastAPI + uvicorn; SQLAlchemy 2.x typed ORM; Alembic; psycopg 3; Pydantic v2 + pydantic-settings; structlog; pytest + fastapi.testclient; ruff.
 - Layout: package gisdb in src/gisdb/ (config, db, models, logging_config, records, ingest, geodesy, analysis, cli, api/{app,deps,schemas,routes}); migrations/; tests/; scripts/. Import as gisdb.<module>. No extra layers (no repositories, services packages, DI frameworks).
 - SQLAlchemy: class Base(DeclarativeBase) in models.py with the naming convention; Mapped[...], mapped_column(), relationship(), select(), session.scalars()/.execute()/.get(). NEVER declarative_base(), Column() in models, session.query(), engine.execute().
@@ -393,15 +510,16 @@ Gate steps:
 - Database URL only from settings (GISDB_DATABASE_URL). Postgres URLs are postgresql+psycopg://. NEVER postgresql:// or psycopg2.
 - Keys: id = internal integer PK, never in the API; <x>_id = natural string key used in URLs and JSON (exception: ingest_run_id and analysis_run_id in CLI output and logs are the runs' integer id); <x>_pk = integer FK to <x>s.id. Units in names: _km, _m, _s. Times are timezone-aware UTC.
 - Types: UTCDateTime and JSONType from gisdb.models; server_default=text("CURRENT_TIMESTAMP"), NEVER func.now(); String(n) + named CheckConstraint instead of Enum; no ARRAY, no Geography.
-- Coordinates: in code a position is (lat, lon) in degrees; [lon, lat] exists only at the JSON boundary in records.py.
+- Coordinates: in code a position is (lat, lon) in degrees; the source's coordinate layout (PLAN §3, COORD_ORDER) is unpacked only at the JSON boundary in records.py.
 - Pydantic v2: model_config = ConfigDict(...), field_validator, model_validator, model_validate, model_dump. NEVER class Config, orm_mode, @validator, @root_validator, parse_obj, .dict(). Settings: from pydantic_settings import BaseSettings, SettingsConfigDict.
 - FastAPI: Annotated parameters (Annotated[Session, Depends(get_session)], Annotated[int, Query(ge=1, le=500)] = 50); GET routes only; NEVER @app.on_event.
 - Logging: log = structlog.get_logger(__name__); log.info("area.object.verb", key=value) with names from PLAN §7; logs go to stderr; NEVER print() in src/ (a CLI writes its one JSON result line with sys.stdout.write); never log whole payloads or coordinate arrays.
 - Errors: catch specific exceptions (e.g. sqlalchemy.exc.SQLAlchemyError, json.JSONDecodeError); `except Exception` only to log.exception(...) or to re-raise; inside except, raise NewError(...) from exc.
-- Geo: sphere R = 6371.0088 km; all geodesy in src/gisdb/geodesy.py with math only; NEVER interpolate, average or subtract raw lat/lon.
+- Geo: a sphere with the radius in PLAN §8 (EARTH_RADIUS_KM); all geodesy in src/gisdb/geodesy.py with math only; NEVER interpolate, average or subtract raw lat/lon.
 - Migrations: the human runs autogenerate and reviews. NEVER create or edit files in migrations/versions/.
 - Tests: NEVER weaken, skip or delete a test or an expected value to make it pass; if a test looks wrong, stop and say why.
 - Scope: change only the files the prompt names; add dependencies only when the prompt names them; never run git; never leave a server running; after 3 failed attempts at the same command, stop and report.
+- Lint: once pyproject.toml exists, run uv run ruff format and uv run ruff check --fix on the .py files you changed before replying, and fix what remains by hand (lines of at most 100 characters; split a long string in src/ into implicitly concatenated pieces).
 - Replies: changed files (one line each) plus the last 15 lines of any command you ran; never paste whole files back.
 ```
 
@@ -480,7 +598,7 @@ Then it brings the Phase 0 profiler up to these rules before any gate runs. P0.1
 uv run ruff format -q scripts && uv run ruff check --fix -q scripts   # expect no output; hand-fix any reported line (≤ 5 lines)
 ```
 
-Only `scripts/` is linted here, because uv's template `src/gisdb/__init__.py` still holds a `print` until P1.1 replaces it.
+Only `scripts/` is linted here, because uv's template `src/gisdb/__init__.py` still holds a `print` until P1.1 replaces it. For the same reason, `gate` is pasted in Human step 1.a but first run after P1.1: before that it fails with T201 on the template.
 
 **Why this config** (verified with ruff 0.16.10):
 - `practice/` and `temp/` exist only in the practice repo. `practice/` holds the printing generator and checker scripts, which must not fail the gate or `verify.sh`, nor be rewritten by `ruff format`.
@@ -555,7 +673,7 @@ class Base(DeclarativeBase):
 **Column rules:**
 - Every model uses `Mapped[...]` / `mapped_column`.
 - Timestamps are `UTCDateTime`. Floats are `Float`. Integer PKs are `Integer` (they autoincrement on both dialects).
-- `created_at` / `updated_at` / `started_at` use `server_default=text("CURRENT_TIMESTAMP")`. The ingestion service sets `updated_at` explicitly when it updates a row.
+- `created_at` / `updated_at` and the run tables' `started_at` (`ingest_runs`, `analysis_runs`) use `server_default=text("CURRENT_TIMESTAMP")`; `trajectories.started_at` comes from the data and has no default (Human step 2.b's practice count of `CURRENT_TIMESTAMP` is 5). The ingestion service sets `updated_at` explicitly when it updates a row.
 - Counters are `Integer`, NOT NULL, `default=0`.
 - CHECK names below are the `name=` given to `CheckConstraint`. The rendered name is `ck_<table>_<name>`.
 
@@ -565,9 +683,11 @@ class Base(DeclarativeBase):
 |---|---|---|
 | `ingest_runs` | `id` Integer PK; `started_at` UTCDateTime NOT NULL default CURRENT_TIMESTAMP; `finished_at` UTCDateTime NULL; `status` String(16) NOT NULL; `files` JSONType NOT NULL (list of `{path, sha256, records}`); `seen`, `inserted`, `updated`, `unchanged`, `duplicates`, `rejected` Integer NOT NULL default 0; `error` Text NULL | CHECK `status_valid`: `status IN ('running', 'succeeded', 'failed')`; CHECK `accounting`: `status <> 'succeeded' OR seen = inserted + updated + unchanged + duplicates + rejected` |
 | `ingest_rejections` | `id` Integer PK; `ingest_run_pk` Integer NOT NULL FK → `ingest_runs.id` ON DELETE CASCADE; `entity` String(16) NOT NULL; `source_file` String(255) NOT NULL; `record_index` Integer NULL (NULL = whole file); `record_key` String(64) NULL; `reason_code` String(32) NOT NULL; `detail` Text NOT NULL; `payload` JSONType NULL (raw record) | CHECK `entity_valid`: `entity IN ('trajectory', 'zone', 'file')`; CHECK `reason_code_valid`: `reason_code IN (<the 8 codes of §6.d>)`; index on `ingest_run_pk` |
-| `trajectories` | `id` Integer PK; `trajectory_id` String(64) NOT NULL; `callsign` String(32) NULL; `aircraft_type` String(16) NULL; `origin` String(8) NULL; `destination` String(8) NULL (these four = `TRAJECTORY_ATTRS`); `started_at`, `ended_at` UTCDateTime NOT NULL; `point_count` Integer NOT NULL; `content_hash` String(64) NOT NULL; `source_file` String(255) NOT NULL; `last_ingest_run_pk` Integer NULL FK → `ingest_runs.id` ON DELETE SET NULL; `created_at`, `updated_at` UTCDateTime NOT NULL default CURRENT_TIMESTAMP | UNIQUE (`trajectory_id`); CHECK `min_points`: `point_count >= 2`; CHECK `time_order`: `ended_at >= started_at`; indexes on `started_at`, `last_ingest_run_pk`; relationship `points` ordered by `seq`, `cascade="all, delete-orphan"`, `passive_deletes=True` (read-only use) |
-| `trajectory_points` | `trajectory_pk` Integer FK → `trajectories.id` ON DELETE CASCADE; `seq` Integer (0..n−1 in time order); `ts` UTCDateTime NOT NULL; `lat`, `lon` Float NOT NULL; `alt_m` Float NULL | PK (`trajectory_pk`, `seq`); UNIQUE (`trajectory_pk`, `ts`); CHECK `lat_range`: `lat >= -90 AND lat <= 90`; CHECK `lon_range`: `lon >= -180 AND lon < 180`; CHECK `seq_nonneg`: `seq >= 0` |
-| `zones` | `id` Integer PK; `zone_id` String(64) NOT NULL; `name` String(128) NULL (= `ZONE_ATTRS`); `center_lat`, `center_lon`, `radius_km` Float NOT NULL; `content_hash` String(64) NOT NULL; `source_file` String(255) NOT NULL; `last_ingest_run_pk` Integer NULL FK SET NULL; `created_at`, `updated_at` as above | UNIQUE (`zone_id`); CHECK `lat_range`, `lon_range` (on the centre); CHECK `radius_range`: `radius_km > 0 AND radius_km < 10000`; index on `last_ingest_run_pk` |
+| `trajectories` | `id` Integer PK; `trajectory_id` String(64) NOT NULL; `callsign` String(32) NULL; `aircraft_type` String(16) NULL; `origin` String(8) NULL; `destination` String(8) NULL (these four = `TRAJECTORY_ATTRS`, typed as its value says); `started_at`, `ended_at` UTCDateTime NOT NULL; `point_count` Integer NOT NULL; `content_hash` String(64) NOT NULL; `source_file` String(255) NOT NULL; `last_ingest_run_pk` Integer NULL FK → `ingest_runs.id` ON DELETE SET NULL; `created_at`, `updated_at` UTCDateTime NOT NULL default CURRENT_TIMESTAMP | UNIQUE (`trajectory_id`); CHECK `min_points`: `point_count >= 2`; CHECK `time_order`: `ended_at >= started_at`; indexes on `started_at`, `last_ingest_run_pk`; relationship `points` ordered by `seq`, `cascade="all, delete-orphan"`, `passive_deletes=True` (read-only use) |
+| `trajectory_points` | `trajectory_pk` Integer FK → `trajectories.id` ON DELETE CASCADE; `seq` Integer (0..n−1 in time order); `ts` UTCDateTime NOT NULL; `lat`, `lon` Float NOT NULL; `alt_m` Float NULL; one typed NULL column per `POINT_ATTRS` field (practice: none) | PK (`trajectory_pk`, `seq`); UNIQUE (`trajectory_pk`, `ts`); CHECK `lat_range`: `lat >= -90 AND lat <= 90`; CHECK `lon_range`: `lon >= -180 AND lon < 180`; CHECK `seq_nonneg`: `seq >= 0` |
+| `zones` | `id` Integer PK; `zone_id` String(64) NOT NULL; `name` String(128) NULL (= `ZONE_ATTRS`, typed as its value says); `center_lat`, `center_lon`, `radius_km` Float NOT NULL; `content_hash` String(64) NOT NULL; `source_file` String(255) NOT NULL; `last_ingest_run_pk` Integer NULL FK SET NULL; `created_at`, `updated_at` as above | UNIQUE (`zone_id`); CHECK `lat_range`, `lon_range` (on the centre); CHECK `radius_range`: `radius_km > 0 AND radius_km < 10000`; index on `last_ingest_run_pk` |
+
+Lines stay at most 100 characters, because ruff's E501 applies to `src/` and `ruff format` cannot split a string: P2.1 writes the `accounting` and `reason_code_valid` CHECK texts as implicitly concatenated string pieces. As single literals they are 101 and 183 characters long, and `gate lint` fails (verified with ruff 0.16.10). P2.1's DONE WHEN therefore runs ruff too.
 
 The radius cap of 10 000 km keeps every zone below a quarter circumference (10 007.6 km). Then the inside part of a minor arc is a single interval, which is what geodesy item 6 relies on.
 
@@ -611,11 +731,11 @@ The default `file_template` gives `0001_core_schema.py`.
 
 The ruff line runs before the review. Alembic 1.20's template trips the project rules: a trailing space after `Revises:` (W291), `typing.Sequence`/`Union` (UP035, UP007) and import order (I001). Formatting first means the gate never rewrites a reviewed migration, and `verify.sh`'s `ruff format --check` passes. Verified: after the two commands, the generated 0001 passes `ruff check` and imports on Python 3.11. Its strings are now double-quoted, which the checklist below assumes.
 
-**Review checklist.** Do it in 4 minutes. Then add the line `Reviewed: checklist 1-8 OK` to the migration's docstring.
+**Review checklist.** Do it in 4 minutes. Then add `Reviewed: checklist 1-8 OK` as docstring line 3, after the blank line that ends Alembic's message: `sed -i '2a Reviewed: checklist 1-8 OK' "$f" && grep -n "Reviewed:" "$f"` prints `3:Reviewed: checklist 1-8 OK`. Alembic takes the docstring's first paragraph as the migration message, so a line inserted directly after line 1 would print with every `Running upgrade` log line and in `alembic history`.
 
 1. The revision is `"0001"` with `down_revision = None`; for 0002, `"0002"` with `down_revision = "0001"`.
 2. `grep -nE "gisdb\.|models\.|[^.]Text\(\)" <file>` prints nothing (render_item worked).
-3. 0001 creates exactly the 5 core tables. 0002 creates exactly the 4 analysis tables and has no `alter_column`, `add_column` or `drop_*` on 0001 tables in `upgrade()`.
+3. 0001 creates exactly the 5 core tables, plus one per PLAN §4 DELTA table (practice: none). 0002 creates exactly the 4 analysis tables, plus one per DELTA table (for example Appendix E.5's `trajectory_approaches`), and has no `alter_column`, `add_column` or `drop_*` on 0001 tables in `upgrade()`. Every count the playbook's review commands print is a practice value, labelled so.
 4. Every PK, FK (with `ondelete`), UNIQUE, CHECK and index of the models is present, named with `op.f("...")`. The one exception is the explicitly named `uq_trajectory_intersections_pair_seq` in 0002, which appears as a plain string.
 5. Server defaults are `sa.text("CURRENT_TIMESTAMP")`, never `now()`.
 6. Timestamps are `sa.DateTime(timezone=True)`; JSON columns are `sa.JSON().with_variant(postgresql.JSONB(), "postgresql")`.
@@ -628,7 +748,7 @@ After the checklist, run the full `gate`, append the AI_LOG row of the prompt be
 
 **CLI:**
 - `uv run gisdb ingest [PATH ...]`, with default `data`.
-  - A directory expands to its `*.json` files sorted by name (not recursive); files are taken as given.
+  - A directory expands to its `*.json` files sorted by name (not recursive); files are taken as given. A PLAN §5 DELTA may set another file order (Appendix E.8: referenced entities first); the practice order is by name.
   - Stdout gets exactly one JSON line, keys in this order: `{"ingest_run_id", "status", "seen", "inserted", "updated", "unchanged", "duplicates", "rejected"}`.
   - Exit 0 if `status == "succeeded"`, else 1. Logs go to stderr.
 - `uv run gisdb stats` prints `json.dumps({table.name: row_count for table in Base.metadata.sorted_tables}, sort_keys=True)`.
@@ -641,21 +761,26 @@ After the checklist, run the full `gate`, append the AI_LOG row of the prompt be
 | object with `"type": "FeatureCollection"` | `features[]` | zone | feature `id` → `zones.zone_id` | `zones` |
 | anything else, or invalid JSON | — | file | — | one `ingest_rejections` row `invalid_file` (counts as 1 seen, 1 rejected) |
 
+Other source shapes (a map keyed by id, a register file, cross-file references) follow Appendix E.8 through PLAN §3 and §5 DELTA lines. A data file rejected whole is easy to miss among the expected rejections, so Verify 3 checks that no row has `entity = 'file'` (practice: none).
+
 **`src/gisdb/records.py`** (P3.1; pure, no DB):
 - `RecordRejected(Exception)` with `.code` and `.detail`.
 - `REASON_CODES` tuple.
 - Frozen dataclasses:
-  - `PointRecord(seq, ts, lat, lon, alt_m)`;
-  - `TrajectoryRecord(trajectory_id, callsign, aircraft_type, origin, destination, started_at, ended_at, points: tuple[PointRecord, ...], content_hash)`;
-  - `ZoneRecord(zone_id, name, center_lat, center_lon, radius_km, content_hash)`.
+  - `PointRecord(seq, ts, lat, lon, alt_m)`, plus one field per `POINT_ATTRS` column (practice: none);
+  - `TrajectoryRecord(trajectory_id, <one field per TRAJECTORY_ATTRS column>, started_at, ended_at, points: tuple[PointRecord, ...], content_hash)`; practice fields `callsign, aircraft_type, origin, destination`;
+  - `ZoneRecord(zone_id, <one field per ZONE_ATTRS column>, center_lat, center_lon, radius_km, content_hash)`; practice field `name`.
 - Functions:
   - `load_records(path) -> tuple[str, list[dict]]`;
   - `normalize_trajectory(raw) -> TrajectoryRecord`;
   - `normalize_zone(raw) -> ZoneRecord`;
-  - `record_key(entity, raw) -> str | None`;
+  - `record_key(entity, raw) -> str | None`: the natural key when it is a non-empty string or an integer (returned as its decimal string), else None;
   - `reason_from_validation_error(exc) -> str`;
   - `content_hash(payload) -> str`.
 - Source models are Pydantic v2 with `ConfigDict(extra="ignore")`. Every optional field has an explicit `= None`: in Pydantic v2, `str | None` without a default is still required, so an absent `callsign` would reject the record as `missing_field`.
+- The natural key is `str` with `Field(min_length=1, max_length=64)`. When PLAN §3 types the key as an integer (DATA_PROFILE.md: `int`), that model's ConfigDict adds `coerce_numbers_to_str=True`; without it an integer key fails with `string_type`, which maps to `invalid_value` (verified on Pydantic 2.14).
+- A `String(n)` attribute is validated with `max_length=n`, so an over-long value rejects its record (`string_too_long` → `invalid_value`) instead of failing the whole run's insert on Postgres.
+- The shapes below are the practice ones (P3.1's "Shapes" sentence); on the day they follow PLAN §3:
   - `PositionIn(ts: AwareDatetime, coord: tuple[float, float], alt_ft: float | None = None)`;
   - `AircraftIn(icao_type: str | None = None)`;
   - `FlightIn(flight_id: str (1-64 chars), callsign: str | None = None, aircraft: AircraftIn | None = None, origin: str | None = None, destination: str | None = None, positions: list[PositionIn])`;
@@ -668,7 +793,7 @@ After the checklist, run the full `gate`, append the AI_LOG row of the prompt be
    - `greater_than`, `greater_than_equal`, `less_than`, `less_than_equal` → `out_of_range`;
    - anything else → `invalid_value`.
 
-   `AwareDatetime` accepts ISO-8601 with `Z` or an offset and integer epoch seconds. It rejects naive strings (`timezone_aware`) and impossible times (`datetime_from_date_parsing`). Both behaviours were verified.
+   Timestamps follow `TIME_FORMATS`. When every form carries a UTC offset or is an epoch number (practice), the field is `AwareDatetime`: it accepts ISO-8601 with `Z` or an offset and integer epoch seconds (and reads numbers above 2e10 as epoch milliseconds), and it rejects naive strings (`timezone_aware`) and impossible times (`datetime_from_date_parsing`). When PLAN §3 says naive times are UTC, the field is `datetime`, and step 2 attaches UTC to naive values (`value.replace(tzinfo=UTC)`). All of these behaviours were verified on Pydantic 2.14.
 
    The rules are checked in the order listed. Verified on Pydantic 2.14:
    - a null `flight_id`, `positions`, `ts` or `coord` gives `missing_field`;
@@ -676,17 +801,17 @@ After the checklist, run the full `gate`, append the AI_LOG row of the prompt be
    - absent `callsign`, `aircraft`, `origin` and `destination` are accepted as None.
 2. **Positions.**
    - `ts = ts.astimezone(UTC)`. Pydantic keeps `+02:00`, so this conversion is required.
-   - `lon, lat = coord`, because `COORD_ORDER` is `[lon, lat]`.
+   - Unpack the coordinates per `COORD_ORDER` (practice: `lon, lat = coord`, because it is `[lon, lat]`; named fields are read by name).
    - Outside −90 ≤ lat ≤ 90 or −180 ≤ lon ≤ 180 → `out_of_range`. Then `lon = ((lon + 180) % 360) - 180`, so 180 → −180.
-   - `alt_m = alt_ft * 0.3048`; None stays None.
+   - Altitude per `ALT_UNIT` (practice: `alt_m = alt_ft * 0.3048`; None stays None).
 3. **Order and duplicates.** Sort by `ts` and drop exact duplicate points (same ts, lat, lon, alt_m). Two points left with the same `ts` → `conflicting_points`. Fewer than 2 points → `too_few_points`. Then `seq = 0..n-1`, `started_at`/`ended_at` = first/last `ts`, `point_count = n`.
 4. **Zones.**
-   - `lon, lat = coordinates` with the same range rule.
-   - `radius_unit.lower()`: `"nm"` → × 1.852, `"km"` → × 1.0, anything else → `invalid_value`.
+   - The centre per `COORD_ORDER` (practice: `lon, lat = coordinates`) with the same range rule.
+   - Radius per `RADIUS_UNITS`: with a unit field, the unit compared case-insensitively (practice: `"nm"` → × 1.852, `"km"` → × 1.0, anything else → `invalid_value`); with a fixed unit and no unit field, its factor (for example metres × 0.001).
    - `radius_km` must satisfy 0 < r < 10000, else `out_of_range`.
 5. **Content hash.** `sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=lambda v: v.isoformat()))` hex.
-   - Trajectory payload: `{trajectory_id, callsign, aircraft_type, origin, destination, points: [[ts, lat, lon, alt_m], ...]}`, after steps 2–3.
-   - Zone payload: `{zone_id, name, center_lat, center_lon, radius_km}`.
+   - Trajectory payload: `{trajectory_id, <the TRAJECTORY_ATTRS columns>, points: [[ts, lat, lon, alt_m, <the POINT_ATTRS values>], ...]}`, after steps 2–3; practice: `{trajectory_id, callsign, aircraft_type, origin, destination, points: [[ts, lat, lon, alt_m], ...]}`.
+   - Zone payload: `{zone_id, <the ZONE_ATTRS columns>, center_lat, center_lon, radius_km}`; practice: `{zone_id, name, center_lat, center_lon, radius_km}`.
    - Because the hash covers the normalized record, epoch vs ISO and offset vs `Z` give the same hash, and unknown fields are ignored.
 
 **Reason codes.** These are the exact strings, also enforced by `ck_ingest_rejections_reason_code_valid`:
@@ -701,6 +826,8 @@ After the checklist, run the full `gate`, append the AI_LOG row of the prompt be
 | `too_few_points` | Fewer than 2 distinct positions |
 | `conflicting_points` | Same timestamp, different position in one record |
 | `duplicate_key_conflict` | Key already seen earlier in this run with different content (the first copy wins) |
+
+A brief with cross-file references (a track whose vessel is not in the register) adds a ninth code, `unknown_reference`, through Appendix E.8: to P2.1's `reason_code_valid` CHECK, to P3.1's `REASON_CODES` and as one `test_rejections` case. The practice data needs none.
 
 **`src/gisdb/ingest.py`: `run_ingest(paths: list[Path], session_factory=SessionLocal) -> dict`** (P3.2):
 1. **Transaction 1:** insert `IngestRun(status="running", files=[])` and commit. Log `ingest.run.started`.
@@ -749,20 +876,20 @@ After the checklist, run the full `gate`, append the AI_LOG row of the prompt be
 |---|---|
 | `Page[T]` (`BaseModel, Generic[T]`) | `items: list[T]`, `total: int`, `limit: int`, `offset: int` |
 | `HealthOut` | `status: str`, `database: str` |
-| `PointOut` | `seq: int`, `ts: datetime`, `lat: float`, `lon: float`, `alt_m: float \| None` |
+| `PointOut` | `seq: int`, `ts: datetime`, `lat: float`, `lon: float`, `alt_m: float \| None`, plus one field per `POINT_ATTRS` column (practice: none) |
 | `PassEndpointOut` | `kind: str`, `lat: float`, `lon: float`, `time: datetime`, `alt_m: float \| None` |
 | `ZonePassOut` | `trajectory_id: str`, `zone_id: str`, `seq: int`, `entry: PassEndpointOut`, `exit: PassEndpointOut`, `distance_inside_km: float`, `duration_s: float` |
 | `IntersectionOut` | `other_trajectory_id: str`, `seq: int`, `kind: str`, `lat: float`, `lon: float`, `time_self: datetime`, `time_other: datetime`, `time_gap_s: float`, `alt_self_m: float \| None`, `alt_other_m: float \| None` |
 | `TrajectoryAnalysisOut` | `length_km: float`, `length_3d_km: float \| None`, `duration_s: float`, `zone_pass_count: int`, `intersection_count: int`, `analyzed_at: datetime`, `algorithm_version: str`, `earth_radius_km: float`, `stale: bool` |
-| `TrajectorySummary` | `trajectory_id: str`, `callsign`, `aircraft_type`, `origin`, `destination` (all `str \| None`; = `TRAJECTORY_ATTRS`), `started_at: datetime`, `ended_at: datetime`, `point_count: int`, `analysis: TrajectoryAnalysisOut \| None = None` |
+| `TrajectorySummary` | `trajectory_id: str`; one field per `TRAJECTORY_ATTRS` column, typed from its column (`String` → `str \| None`, `Integer` → `int \| None`, `Float` → `float \| None`; practice: `callsign`, `aircraft_type`, `origin`, `destination`, all `str \| None`); `started_at: datetime`, `ended_at: datetime`, `point_count: int`, `analysis: TrajectoryAnalysisOut \| None = None` |
 | `TrajectoryDetail(TrajectorySummary)` | `zone_passes: list[ZonePassOut] = []`, `intersections: list[IntersectionOut] = []` |
 | `ZoneCenter` | `lat: float`, `lon: float` |
 | `ZoneAnalysisOut` | `pass_count: int`, `trajectory_count: int`, `analyzed_at: datetime` |
-| `ZoneSummary` | `zone_id: str`, `name: str \| None`, `center: ZoneCenter`, `radius_km: float`, `analysis: ZoneAnalysisOut \| None = None` |
+| `ZoneSummary` | `zone_id: str`; one field per `ZONE_ATTRS` column, typed the same way (practice: `name: str \| None`); `center: ZoneCenter`, `radius_km: float`, `analysis: ZoneAnalysisOut \| None = None` |
 | `ZoneDetail(ZoneSummary)` | `passes: list[ZonePassOut] = []` |
 
 **`ZoneSummary.center`** cannot come from `from_attributes`, because the row has `center_lat`/`center_lon`.
-- `ZoneSummary` has a `@model_validator(mode="before")` classmethod. When the input is not a dict, it returns `{"zone_id", "name", "center": {"lat": obj.center_lat, "lon": obj.center_lon}, "radius_km"}`. `ZoneDetail` inherits it.
+- `ZoneSummary` has a `@model_validator(mode="before")` classmethod. When the input is not a dict, it returns `{"zone_id", <the ZONE_ATTRS columns>, "center": {"lat": obj.center_lat, "lon": obj.center_lon}, "radius_km"}`; the practice column is `name`. `ZoneDetail` inherits it.
 - P4.1 writes the validator with the models; P4.2's `test_zones_list_and_detail` covers it.
 - Verified on Pydantic 2.14: `ZoneSummary.model_validate(row)` and `ZoneDetail.model_validate(row)` both work.
 
@@ -822,7 +949,7 @@ After the checklist, run the full `gate`, append the AI_LOG row of the prompt be
 **Request middleware** (`@app.middleware("http")` in `create_app`; verified):
 1. Read `X-Request-ID`. If it does not match `^[A-Za-z0-9._-]{1,64}$`, use `uuid4().hex`.
 2. Call `clear_contextvars()`, then `bind_contextvars(request_id=..., method=request.method, path=request.url.path)`.
-3. Time the call. If `call_next` raises, log `http.unhandled_error` with `log.exception` and return `JSONResponse({"detail": "internal server error", "request_id": rid}, status_code=500)`.
+3. Time the call. If `call_next` raises, log `http.unhandled_error` with `log.exception` and use `JSONResponse({"detail": "internal server error", "request_id": rid}, status_code=500)` as the response. Steps 4 and 5 still run, so the 500 carries `X-Request-ID` and gets its own `http.request` line with the same `request_id` (two correlated lines, asserted by `test_unhandled_error_json`).
 4. Set the response header `X-Request-ID`.
 5. Log `http.request` with `status_code` and `duration_ms` (rounded to 0.1). Then `clear_contextvars()`.
 
@@ -957,16 +1084,16 @@ T11 track_intersections: A=[(0,-2)@0, (0,0)@10, (0,2)@20], B=[(-2,0)@5, (0,0)@15
 
 Rule text for P6.1: "Do NOT loosen a tolerance or change an expected value to make a test pass. If you believe a value is wrong, stop and tell me." Gate: `git diff --stat -- tests/` after any fix.
 
-**Property and oracle tests (`tests/test_geodesy_oracle.py`, P6.2).** Verbatim from geo.md P6b; 7 tests, under 20 s.
+**Property and oracle tests (`tests/test_geodesy_oracle.py`, P6.2).** From geo.md P6b, with two choices pinned after the Step A critique (EX-16: the base azimuth of `rand_track` and test 4's zone); 7 tests, under 20 s. Implemented exactly this way against a spec implementation, it gave 7 passed in about 5 s, with 99 of 100 cases checked in test 5 and 100 of 100 in test 6.
 
 ```text
 Add tests/test_geodesy_oracle.py (tests only; do not modify src/). geographiclib is a dev dependency: from geographiclib.geodesic import Geodesic; SPHERE = Geodesic(6371008.8, 0.0) (exact sphere; metres; f = 0).
 Use random.Random(seed) loops, NOT hypothesis. N = 200 for tests 1-4 and 7, N_ORACLE = 100 for tests 5-6. Deterministic.
-Helpers: rand_point(rng) = (degrees(asin(rng.uniform(-1, 1))), rng.uniform(-180, 180)); dest(lat, lon, azi, km) = SPHERE.Direct(lat, lon, azi, km*1000) -> (lat2, normalize_lon(lon2)); sdist(p, q) = SPHERE.Inverse(...)["s12"]/1000; rand_track(rng) = a start point plus 1-4 more points, each dest(prev, azimuth + uniform(-60, 60), uniform(20, 600)).
+Helpers: rand_point(rng) = (degrees(asin(rng.uniform(-1, 1))), rng.uniform(-180, 180)); dest(lat, lon, azi, km) = SPHERE.Direct(lat, lon, azi, km*1000) -> (lat2, normalize_lon(lon2)); sdist(p, q) = SPHERE.Inverse(...)["s12"]/1000; rand_track(rng) = a start point, a base azimuth uniform(0, 360), then 1-4 more points, each dest(prev, base + uniform(-60, 60), uniform(20, 600)).
 1 distance_km matches sdist within 1e-6 km.
 2 interpolate: for random a, b (b up to 19000 km away) and f: distance(a, p) = f*d and distance(p, b) = (1-f)*d within 1e-6 km.
 3 Inserting the great-circle midpoint into any segment leaves path_length_km unchanged within 1e-6 km.
-4 Longitude-shift invariance: add the same random dlon to every longitude (wrap via normalize_lon) -> same path length and the same list of pass distances (rounded to 1e-5 km).
+4 Longitude-shift invariance: add the same random dlon to every longitude (wrap via normalize_lon) -> same path length and the same list of pass distances (rounded to 1e-5 km) for a zone with centre = dest(start, uniform(0, 360), uniform(0, 300)) and r = uniform(5, 500), shifted with the track.
 5 Circle oracle: scenario = rand_track; centre = dest(a random point on a random segment, random azimuth, uniform(0, 600) km); r = uniform(5, 700). Oracle: per segment, line = SPHERE.InverseLine(...); g(s) = sdist(line.Position(s*1000), centre) - r sampled every 1 km (at least 2 samples); each sign change refined with 60 bisection steps -> entry/exit along-track positions; inside at s=0 iff g(0) <= 0. Skip the case if on ANY segment min(sampled g) lies in (-1 km, +1 km) (near-tangent). Assert: same number of passes as circle_passes; each distance_inside_km within 1e-5 km of the oracle interval; every "crossing" point is at distance r +- 1e-6 km from the centre; the first pass is track_start iff the oracle starts inside; at least 80% of the cases were checked.
 6 Arc oracle: random arc A (10-3000 km); arc B (10-3000 km, random azimuth) through a point within 200 km of A or of its extension. Oracle: sample B at 400 steps; signed cross-track of each sample relative to A = asin(sin(a13)*sin(azi13 - azi12)) using SPHERE.Inverse from A's start (a12 in degrees, azi1); bisect sign changes; keep roots with sdist(a1, x) + sdist(x, a2) - sdist(a1, a2) < 1e-6. Skip cases with a root within 2 m of an endpoint. Assert the same count as segment_intersections, and positions within 1e-5 km.
 7 bounding_cap(rand_track) contains the track: for every segment, 51 interpolated points all satisfy angle(centre, p) <= radius + 1e-12.
@@ -1030,18 +1157,18 @@ Fixtures (pure test files use none of them and run without a database):
 | File (prompt) | Tests | Count |
 |---|---|---|
 | `test_health.py` (P1.1) | `test_health_ok`: GET `/health` → 200 `{"status": "ok", "database": "ok"}` | 1 |
-| `test_migrations.py` (P2.1) | `test_no_drift`: `compare_metadata(MigrationContext.configure(conn, opts={"compare_type": True}), Base.metadata) == []`; `test_round_trip`: downgrade base, upgrade head, current revision == script head; `test_point_lat_check`: a point with lat 95 raises `IntegrityError`; `test_trajectory_id_unique`: a duplicate `trajectory_id` raises `IntegrityError` | 4 |
-| `test_records.py` (P3.1, pure) | `test_coord_order_and_altitude` (coord `[-0.4543, 51.47]`, alt_ft 1000 → lat 51.47, lon −0.4543, alt_m 304.8); `test_timestamps_to_utc` (`"2024-05-01T11:35:55+02:00"` → 09:35:55Z; `1714543200` → 2024-05-01T06:00:00Z); `test_points_sorted_and_deduplicated`; `test_lon_180_normalized` (180 → −180); `test_zone_radius_units` (25 NM → 46.3 km approx; 9.26 km → 9.26); `test_hash_ignores_format` (epoch vs ISO-Z vs offset of the same instants plus an unknown field → equal hash; changed callsign → different); `test_optional_fields_absent` (a record without `callsign`, `aircraft`, `origin` and `destination` → accepted, with `callsign`, `aircraft_type`, `origin` and `destination` all None); `test_rejections` parametrized over 9 cases: missing id → `missing_field`, `flight_id: null` → `missing_field`, lat 91.2 → `out_of_range`, `"2024-05-01T25:61:00Z"` → `invalid_timestamp`, naive `"2024-05-01T09:00:00"` → `invalid_timestamp`, one position → `too_few_points`, radius −5 NM → `out_of_range`, unit `"mi"` → `invalid_value`, same ts with two positions → `conflicting_points` | 16 |
+| `test_migrations.py` (P2.1) | `test_no_drift`: `compare_metadata(MigrationContext.configure(conn, opts={"compare_type": True}), Base.metadata) == []`; `test_round_trip` (uses `migrated_db`, not `db`): its own `cfg = Config("alembic.ini")` with `cfg.attributes["configure_logger"] = False`, as in `migrated_db` (otherwise Alembic's `fileConfig` reconfigures logging inside pytest), then downgrade base, upgrade head, current revision == script head; `test_point_lat_check`: a point with lat 95 raises `IntegrityError`; `test_trajectory_id_unique`: a duplicate `trajectory_id` raises `IntegrityError` | 4 |
+| `test_records.py` (P3.1, pure) | Two groups, so the day's edits are bounded. **Format-independent** (8 items, kept on the day): `test_points_sorted_and_deduplicated`; `test_lon_180_normalized` (180 → −180); and the `test_rejections` cases natural key absent → `missing_field`, natural key null → `missing_field`, lat 91.2 → `out_of_range`, `"2024-05-01T25:61:00Z"` → `invalid_timestamp`, one position → `too_few_points`, same ts with two positions → `conflicting_points`. **Format cases** (8 items, practice values, rewritten on the day from Appendix E.3's drop-ins): `test_coord_order_and_altitude` (coord `[-0.4543, 51.47]`, alt_ft 1000 → lat 51.47, lon −0.4543, alt_m 304.8); `test_timestamps_to_utc` (`"2024-05-01T11:35:55+02:00"` → 09:35:55Z; `1714543200` → 2024-05-01T06:00:00Z); `test_zone_radius_units` (25 NM → 46.3 km approx; 9.26 km → 9.26); `test_hash_ignores_format` (epoch vs ISO-Z vs offset of the same instants plus an unknown field → equal hash; changed callsign → different); `test_optional_fields_absent` (a record without `callsign`, `aircraft`, `origin` and `destination` → accepted, with `callsign`, `aircraft_type`, `origin` and `destination` all None); and the `test_rejections` cases naive `"2024-05-01T09:00:00"` → `invalid_timestamp`, radius −5 NM → `out_of_range`, unit `"mi"` → `invalid_value`. `test_rejections` is one function parametrized over its 9 cases | 16 |
 | `test_ingest.py` (P3.2, DB) | Mini files built with `write_json` in the practice format: flights = 3 valid + an exact copy of one + 1 with lat 95; zones = 2 valid. `test_first_run_counts` (seen 7, inserted 5, updated 0, unchanged 0, duplicates 1, rejected 1; one rejection row `out_of_range` with its payload); `test_second_run_is_noop` (inserted 0, updated 0, unchanged 5, duplicates 1, rejected 1); `test_changed_record_updates` (change a valid record that has no copy in the file, or its copy becomes `duplicate_key_conflict`: changed callsign and one point fewer → updated 1, unchanged 4, `point_count` updated); `test_format_only_change_is_unchanged` (epoch instead of ISO → unchanged 5); `test_conflicting_duplicate_rejected` (same id, different content → rejection `duplicate_key_conflict`, first copy stored); `test_accounting_identity` (every run: seen = sum of the five counts, status succeeded) | 6 |
-| `test_api.py` (P4.1) | `test_list_pagination` (3 seeded; limit=2 → 2 items, total 3; offset=2 → 1; ordered by `trajectory_id`); `test_list_limit_validation` (limit 0, limit 501, offset −1 → 422); `test_detail_404` (exact body); `test_detail_before_analysis` (`analysis` null, empty lists, timestamps end with `Z`); `test_points_ordered` (seq order, total = `point_count`); `test_started_filters` (aware filter works, passed with `params=` or written with `Z`; naive → 422) | 6 |
+| `test_api.py` (P4.1) | `test_list_pagination` (3 seeded; limit=2 → 2 items, total 3; offset=2 → 1; ordered by `trajectory_id`; a request with header `Origin: http://localhost:5173` gets the response header `access-control-allow-origin: *`); `test_list_limit_validation` (limit 0, limit 501, offset −1 → 422); `test_detail_404` (exact body); `test_detail_before_analysis` (`analysis` null, empty lists, timestamps end with `Z`; T-A is seeded with every `TRAJECTORY_ATTRS` column set to a value of its column type, practice `callsign="TST101"`, `aircraft_type="B738"`, `origin="EGLL"`, `destination="LFPG"`, and the detail returns each unchanged, which catches a mistyped response field at the gate); `test_points_ordered` (seq order, total = `point_count`); `test_started_filters` (aware filter works, passed with `params=` or written with `Z`; naive → 422) | 6 |
 | `test_api.py` (P4.2) | `test_zones_list_and_detail` (center, `radius_km`, `analysis` null, `passes` []); `test_zone_404` | 2 |
-| `test_logging.py` (P5.1) | `test_request_id_logged` (header `test-123` echoed; `http.request` dict has `request_id`, `status_code` 200, `duration_ms`, `level` `"info"`, `timestamp` ending `Z`); `test_invalid_request_id_replaced` (`"bad id with spaces"` → 32-char hex); `test_unhandled_error_json` (a route that raises, added via `app.add_api_route` inside the test, → 500 body with `request_id`; `http.unhandled_error` logged) | 3 |
+| `test_logging.py` (P5.1) | `test_request_id_logged` (header `test-123` echoed; `http.request` dict has `request_id`, `status_code` 200, `duration_ms`, `level` `"info"`, `timestamp` ending `Z`); `test_invalid_request_id_replaced` (`"bad id with spaces"` → 32-char hex); `test_unhandled_error_json` (a route that raises, added via `app.add_api_route` inside the test, → 500 body with `request_id`; `http.unhandled_error` and `http.request` are both logged with `request_id` equal to the response's `X-Request-ID`: two correlated lines of one request) | 3 |
 | `test_geodesy.py` (P6.1, pure) | T1–T11 of §6.g; at least one test function per T-row | ≥ 11 |
 | `test_geodesy_oracle.py` (P6.2, pure) | Tests 1–7 of §6.g | 7 |
 | `test_analysis.py` (P6.4, DB) | Seeds with `make_trajectory`: `T-EQ` (0,−1)@12:00 → (0,1)@12:20 and `T-MER` (−1,0)@12:00 → (1,0)@12:20; `make_zone("Z-0", 0, 0, 50)`. `test_equator_meridian` (1 pass per trajectory with entry/exit kinds crossing; entries T-EQ (0, −0.449660) and T-MER (−0.449660, 0), both at 12:05:30.204 ±1 ms; 1 intersection crossing at (0,0), `time_gap_s` 0; `length_km` 222.390160 each; counts 1/1); `test_rerun_identical` (two runs → identical rows ignoring `id` and `analysis_run_pk`); `test_run_provenance` (`succeeded`, `"sphere-nvector-v1"`, 6371.0088, 0.001, counts trajectories 2, zones 1, zone_passes 2, intersections 1); `test_overlap_pair` (two identical routes (0,0),(0,1),(0,2),(0,3) → exactly `overlap_start`, `overlap_end`) | 4 |
 | `test_api.py` (P6.5) | Own seeds, in this order, so the times differ and a flip that forgets times or altitudes fails: `T-EQ` (0,−1)@12:00 → (0,1)@12:20 at alt 1000 m and `T-MER` (−1,0)@12:05 → (1,0)@12:25 at alt 2000 m; `make_zone("Z-0", 0, 0, 50)`; then `run_analysis`. `test_detail_with_analysis` (T-EQ: `analysis.length_km` ≈ 222.390160, `zone_passes[0].entry.kind == "crossing"`; `intersections[0]` has `other_trajectory_id` `"T-MER"`, `time_self` 12:10:00Z, `time_other` 12:15:00Z, `time_gap_s` 300.0, `alt_self_m` 1000.0, `alt_other_m` 2000.0); `test_intersection_perspective` (T-MER: `other_trajectory_id` `"T-EQ"`, `time_self` 12:15:00Z, `time_other` 12:10:00Z, `alt_self_m` 2000.0, `alt_other_m` 1000.0, `time_gap_s` 300.0); `test_zone_detail_passes` (Z-0 has 2 passes, `analysis.pass_count == 2`, `trajectory_count == 2`) | 3 |
 
-**Expected pass counts** of the whole suite after each phase: Phase 1: 1 · Phase 2: 5 · Phase 3: 27 · Phase 4: 35 · Phase 5: 38 · Phase 6: ≥ 63 · Phase 7: unchanged.
+**Expected pass counts** of the whole suite after each phase (practice): Phase 1: 1 · Phase 2: 5 · Phase 3: 27 · Phase 4: 35 · Phase 5: 38 · Phase 6: ≥ 63 · Phase 7: unchanged. A day-of edit to a test list (Appendix E.3 drop-ins, Appendix E.8's `unknown_reference` case) shifts every later count by the items added or removed, so DONE WHEN lines read "16 passed (or the item count of your edited list)" and Verify lines "all passed, none failed", with the practice number as a comment.
 
 Runtime is under 30 s; the oracle tests take about 4–8 s. `test_round_trip` leaves the schema at head. On the day, the test fixtures follow the source format in PLAN §3.
 
@@ -1050,31 +1177,31 @@ Runtime is under 30 s; the oracle tests take about 4–8 s. `test_round_trip` le
 | Script | Prompt | Run as | Contract |
 |---|---|---|---|
 | `scripts/profile_data.py` | P0.1 | `python3 scripts/profile_data.py data/*.json > DATA_PROFILE.md` (system Python; it runs before `uv init`) | Stdlib only, < 150 lines. Never prints whole records. Details below |
-| `scripts/api_get.py` | P1.1 | `uv run python scripts/api_get.py [--request-id ID] PATH [PATH ...]` | In-process `fastapi.testclient.TestClient(gisdb.api.app.app)`, no server and no port. For each PATH it prints one line, `<status> <path> <json.dumps(body, sort_keys=True, separators=(",", ":"))>` (or the raw text if the body is not JSON). It sends `X-Request-ID` when `--request-id` is given. Always exits 0. Logs go to stderr. Before importing TestClient it calls ``warnings.filterwarnings("ignore", message="Using `httpx` with `starlette.testclient`")``, since the pytest filter does not apply outside pytest |
+| `scripts/api_get.py` | P1.1 | `uv run python scripts/api_get.py [--request-id ID] PATH [PATH ...]` | In-process `fastapi.testclient.TestClient(gisdb.api.app.app)`, no server and no port. For each PATH it prints one line, `<status> <path> <json.dumps(body, sort_keys=True, separators=(",", ":"))>` (or the raw text if the body is not JSON). It sends `X-Request-ID` when `--request-id` is given. Always exits 0. Logs go to stderr. Inside `main()`, before importing TestClient, it calls ``warnings.filterwarnings("ignore", message="Using `httpx` with `starlette.testclient`")``, since the pytest filter does not apply outside pytest and the warning fires at import. Then it imports `TestClient` from `fastapi.testclient`, a blank line, and `app` from `gisdb.api.app`: E402 does not apply inside a function, and the blank line between the third-party and the first-party import keeps ruff's I001 quiet (without it P1.1's own `ruff check .` fails once) |
 | `scripts/smoke.py` | P7.2 | `uv run python scripts/smoke.py [--port 8765]` | Owns a live server. Details below |
 | `scripts/verify.sh` | P7.2 | `bash scripts/verify.sh [DATA_DIR]` | End-to-end proof. **Resets the dev DB.** Details below |
 | `scripts/check_invariants.py` | P7.1 | `uv run python scripts/check_invariants.py` | §6.g; last line `INVARIANTS OK (<n> checks)` |
 
 **`profile_data.py` output format** (Markdown on stdout). For each file it prints, in this order:
 1. `## <path>`.
-2. One bullet: the top-level type and the record list found. That is the top-level list itself, or the first list of objects under a top-level key, with `features` preferred. For example: `- top level: object; records: "flights" (list, 15 items); other keys: exported_at, source`.
+2. One bullet: the top-level type and the record list found. That is the top-level list itself, or the first list of objects under a top-level key, with `features` preferred. If there is none, but the top level or a top-level key is an object whose values are all lists (or all objects), that map is the record set: report `records: "<key>" (map, N keys, M items)` (or `records: top-level map (N keys, M items)`), profile each value's items under the path `{}[]` (or `{}`), and add a table row `{key}` with the keys' types and distinct count. `other keys` lists at most 10 keys, then `(N more)`. For example: `- top level: object; records: "flights" (list, 15 items); other keys: exported_at, source`.
 3. A table `| path | types | n | nulls | min | max | distinct | example |` over every dotted path inside the records:
    - lists of objects become `name[]`;
    - lists of ≤ 4 scalars are expanded per index, `name[0]`, `name[1]`;
    - `min`/`max` are given for numbers; `distinct` for strings (capped at 1000);
    - the example is the first non-null value, cut to 40 characters.
-4. `- repeated keys:`: values seen more than once for record-level fields named `id` or ending in `_id`.
-5. `- timestamp forms:`: for every path whose example looks like a timestamp (an ISO date prefix, or an integer above 1e9), the counts of `Z`, `±HH:MM`, `no offset`, `epoch int` and `other`.
+4. `- repeated keys:`: values seen more than once in a record-level field (a path outside any list) named `id`, ending in `_id`, or whose distinct count is at least 90% of its n (a likely key, such as an MMSI), written `FIELD VALUE xCOUNT`; for a map record set, also the map keys repeated in the file, read with `json.load(..., object_pairs_hook=...)` because a plain dict keeps only the last of repeated keys; `none` if there are none.
+5. `- timestamp forms:`: for every path whose example looks like a timestamp (an ISO date prefix, or an integer above 1e9), the counts of `Z`, `±HH:MM`, `no offset`, `epoch s` (integers below 2e10), `epoch ms` and `other`.
 
 **Practice expectations:**
-- `data/flights.json`: object; records `"flights"` (list, 15 items); `flight_id` n 14, distinct 13; repeated keys `FLT-1004 x2`.
+- `data/flights.json`: object; records `"flights"` (list, 15 items); other keys `exported_at, source`; `flight_id` n 14, distinct 13; repeated keys `flight_id FLT-1004 x2, callsign PRAC104 x2` (`callsign` n 15, distinct 14: the record at index 14 is a full copy of FLT-1004; no other record-level field reaches 90%).
 - `positions[].coord[0]` min −166.203515, max 178.303493. Values beyond ±90 mean this is longitude.
 - `positions[].coord[1]` min 35.5494, max 91.2. 91.2 is the invalid record.
 - `positions[].alt_ft`: 2 nulls, max 39000.
-- `positions[].ts` forms: Z 141, ±HH:MM 41, epoch int 28 (210 positions).
-- `data/zones.json`: object; records `"features"` (11); `geometry.coordinates[0]` min −179.95, max 0.0; `properties.radius` min −5, max 75; `properties.radius_unit` distinct 2.
+- `positions[].ts` forms: Z 141, ±HH:MM 41, epoch s 28 (210 positions).
+- `data/zones.json`: object; records `"features"` (11); `geometry.coordinates[0]` min −179.95, max 0.0; `properties.radius` min −5, max 75; `properties.radius_unit` distinct 2; repeated keys none.
 
-These are prototype values; the generator's data is authoritative.
+These values were checked against the generated files on 2026-10-08 (DATA-SPEC §3.4).
 
 **`smoke.py`:**
 1. Start `[sys.executable, "-m", "gisdb.cli", "serve", "--host", "127.0.0.1", "--port", PORT]` with `env={**os.environ, "GISDB_LOG_LEVEL": "INFO"}`, stdout to DEVNULL and stderr to a temp file. `cli.py` ends with `if __name__ == "__main__": raise SystemExit(main())`.
@@ -1092,17 +1219,20 @@ These are prototype values; the generator's data is authoritative.
 6. Print `SMOKE OK (8 checks)` and exit 0, or `SMOKE FAIL: <check>: <detail>` and exit 1.
 
 **`verify.sh`** (`#!/usr/bin/env bash`, `set -euo pipefail`, `cd "$(dirname "$0")/.."`, `DATA_DIR="${1:-${DATA_DIR:-<DATA_DIR=data>}}"`).
-- The header line is written that way in the P7.2 prompt, so the brief's directory is baked in as the default.
+
+- The P7.2 prompt writes the header line that way and says to write it with the token's value, so the file holds `DATA_DIR="${1:-${DATA_DIR:-data}}"`: the brief's directory is baked in as the default, and no angle-bracket token reaches the file (the candidate's exported `DATA_DIR` would hide one in every run but a grader's).
 - The argument comes first, then an exported `DATA_DIR`. A grader's plain `bash scripts/verify.sh` still ingests the right files.
+- Commands are separated by `;`, never `&&`: under `set -e`, a failure before `&&` does not stop the script, so `VERIFY OK` would follow a failed lint, downgrade or analyze (verified with bash). The ingest-2 pipeline fails under `pipefail`.
+- P7.2's DONE WHEN only checks it: `bash -n scripts/verify.sh` exits 0 and `uv run python scripts/smoke.py` prints `SMOKE OK (8 checks)`. The agent does not run `verify.sh` (about a minute, and it resets the dev DB); Human step 7.a runs it once and saves the tail for P7.3 and Verify 7.
 
 The steps, in order:
 
 ```bash
-echo "== lint";     uv run ruff check . && uv run ruff format --check .
-echo "== migrate";  uv run alembic downgrade base && uv run alembic upgrade head && uv run alembic check
+echo "== lint";     uv run ruff check .; uv run ruff format --check .
+echo "== migrate";  uv run alembic downgrade base; uv run alembic upgrade head; uv run alembic check
 echo "== ingest 1"; uv run gisdb ingest "$DATA_DIR"
 echo "== ingest 2"; uv run gisdb ingest "$DATA_DIR" | uv run python -c 'import json,sys; r=json.loads(sys.stdin.read()); assert r["status"]=="succeeded" and r["inserted"]==0 and r["updated"]==0, r; print("no-op OK", r)'
-echo "== analyze";  uv run gisdb analyze && uv run gisdb analyze
+echo "== analyze";  uv run gisdb analyze; uv run gisdb analyze
 echo "== invariants"; uv run python scripts/check_invariants.py
 echo "== smoke";    uv run python scripts/smoke.py
 echo "== tests";    uv run pytest -q
@@ -1121,7 +1251,7 @@ The sections, in this order:
 5. **AI usage** (a 5-line summary; the full log is AI_LOG.md)
 6. **Known limitations and next steps**
 
-The NOTES.md text itself must not exceed 80 lines.
+The NOTES.md text itself must not exceed 80 lines. P7.3 replaces every `<NAME=value>` token of its prompt by its value: README.md and NOTES.md contain no angle-bracket tokens (a copied `<SAMPLE_TRJ=…>` would be a shell input redirect in the evidence map), and Verify 7 greps for them.
 
 **How to evaluate in 10 minutes:**
 1. `bash scripts/verify.sh`, about 1 min; it ends `VERIFY OK`.
@@ -1136,7 +1266,7 @@ The NOTES.md text itself must not exceed 80 lines.
 | Criterion | Artifact | 60-second proof |
 |---|---|---|
 | Reproducible end to end | `scripts/verify.sh` | `bash scripts/verify.sh` → `VERIFY OK` |
-| Schema: keys, constraints, indexes | `src/gisdb/models.py`, `0001_core_schema.py` | `grep -c "CheckConstraint\|UniqueConstraint" migrations/versions/0001_core_schema.py`; `uv run alembic check` → `No new upgrade operations detected.` |
+| Schema: keys, constraints, indexes | `src/gisdb/models.py`, `0001_core_schema.py` | `grep -c -e CheckConstraint -e UniqueConstraint migrations/versions/0001_core_schema.py`; `uv run alembic check` → `No new upgrade operations detected.` |
 | Reviewed migrations | `migrations/versions/*.py` | `grep -n "Reviewed:" migrations/versions/*.py` → 2 lines |
 | Idempotent, auditable ingestion | `src/gisdb/ingest.py`, `ingest_runs`, `ingest_rejections` | `uv run gisdb ingest data 2>/dev/null` twice → the second shows `"inserted": 0, "updated": 0`; `uv run gisdb stats` |
 | API models, pagination, errors | `src/gisdb/api/` | `uv run python scripts/api_get.py "/trajectories?limit=2" /trajectories/NOPE "/trajectories?limit=0"` → 200 / 404 / 422 |
@@ -1144,20 +1274,23 @@ The NOTES.md text itself must not exceed 80 lines.
 | Geo correctness | `geodesy.py`, `test_geodesy*.py` | `uv run pytest -q tests/test_geodesy.py tests/test_geodesy_oracle.py` |
 | Analysis stored and served | `analysis.py`, `0002_analysis_results.py` | `uv run gisdb analyze 2>/dev/null && uv run python scripts/api_get.py /trajectories/FLT-1003` (literal id) |
 | Self-consistency on real data | `scripts/check_invariants.py` | `uv run python scripts/check_invariants.py` → `INVARIANTS OK` |
-| Judicious AI use | `AI_LOG.md`, commit tags | `git log --oneline \| head -20`; `cat AI_LOG.md` |
+| Judicious AI use | `AI_LOG.md`, commit tags | `git log --oneline -20`; `cat AI_LOG.md` |
 
 **README.md** (P7.3, ≤ 120 lines) covers:
 - purpose;
-- quickstart: `uv sync`, `cp .env.example .env`, `uv run alembic upgrade head`, ingest, analyze, serve, `uv run pytest`, `bash scripts/verify.sh`;
+- quickstart: create the two databases if they do not exist (PLAN §9; `createdb`), `uv sync`, `cp .env.example .env`, `uv run alembic upgrade head`, ingest, analyze, serve, `uv run pytest`, `bash scripts/verify.sh`;
 - a module map;
 - the data model;
 - the analysis method in 5 lines: sphere R, n-vectors, pass kinds, intersections and overlaps, 1 m tolerance, constant-speed times;
 - an API table;
 - logging;
 - testing layers: analytic, property/oracle, integration;
-- assumptions, linking to PLAN §10.
+- assumptions: each decision of PLAN §10 as a one-line bullet with its reason (at most 10), then a link to PLAN §10 (the brief says to record open choices in the README);
+- a section `## AI usage` of at most 8 lines (brief requirement 7): which prompts went to the small and which to the large model and why (from AI_LOG.md); how every output was checked (the gate after every prompt, expected test values written before the code, human review of both migrations, README claims checked by hand); the escalations and hand fixes; links to AI_LOG.md and NOTES.md. Verify 7 checks `grep -c '^## AI usage' README.md` → `1`.
 
 ## 7. Practice data
+
+Values reconciled with practice/answer_key.json on 2026-10-08.
 
 ### 7.1 Domain and files
 
@@ -1266,7 +1399,7 @@ Callsigns use the 4-letter prefix `PRAC` (7 characters, within the 8-character A
 | ZN-LHR | London Heathrow control zone | 51.47, −0.4543 | 25 NM |
 | ZN-JFK | New York JFK terminal core | 40.6413, −73.7781 | 30 NM |
 | ZN-PITUFFIK | Pituffik restricted area | 76.5312, −68.7032 | 25 NM |
-| ZN-BAFFIN | Baffin Bay exercise area | 72.58, −75.12 (fixed; 0.13 km from the lat/lon average of FLT-1003's gap endpoints, so planar lerp passes 0.11 km from it) | 60 NM |
+| ZN-BAFFIN | Baffin Bay exercise area | 72.58, −75.12 (fixed; 0.13 km from the lat/lon average of FLT-1003's gap endpoints, so planar lerp passes 0.10 km from it: 0.0997 km, refined) | 60 NM |
 | ZN-POLE | North Pole advisory area | 90.0, 0.0 | 75 NM |
 | ZN-DATELINE | Dateline operations area | 61.7, −179.95 | 30 NM |
 | ZN-SURVEY | Bristol Channel survey block | 51.0, −3.0 | 9.26 km |
@@ -1289,27 +1422,27 @@ The resulting miss distances are −0.001 m (tangent), +5.041 m and −5.039 m.
 
 ### 7.5 Scenarios and expected analysis
 
-Prototype values come from `gen_v2.py`, a modified copy of geo's verified generator. Times are UTC on 2024-05-01. Positions are (lat, lon).
+Values are the answer key's, rounded as the key rounds (times to the millisecond, gaps to 3 decimals); the design prototype `gen_v2.py`, a modified copy of geo's verified generator, agreed with them. Times are UTC on 2024-05-01. Positions are (lat, lon).
 
 | Id | Records | Geometry intent | Expected outcome |
 |---|---|---|---|
 | S1 | FLT-1001 × ZN-LHR | Starts inside (at the centre) | 1 pass `track_start`→`crossing`, 46.300000 km; exit (51.596552, −1.092003) 09:03:09.409 |
 | S2 | FLT-1001 × ZN-JFK; FLT-1002 × ZN-JFK, ZN-LHR | Ends inside / starts inside | FLT-1001: `crossing`→`track_end` 55.560000 km, entry (40.952204, −73.261404) 15:13:56.423. FLT-1002: JFK `track_start`→`crossing` 55.56 (exit 13:08:42.240); LHR `crossing`→`track_end` 46.3 (entry 19:11:14.825) |
-| S3 | FLT-1003 × ZN-PITUFFIK | Great-circle bulge inside a 2,550 km reporting gap; no sample inside | 1 pass `crossing`→`crossing`: entry (76.477753, −66.933657) 13:26:53.336, exit (76.698331, −70.350698) 13:33:20.722, 91.466229 km. Planar lerp passes 469.6 km from the centre and misses |
-| S4 | FLT-1003 × ZN-BAFFIN | Ghost zone: only planar code hits | **No pass**. The great circle is 476.4 km from the centre (r 111.12); planar lerp passes 0.11 km from it |
-| S5 | FLT-1004, FLT-1005 × ZN-POLE | Polar zone at (90, 0) | 1 pass each: 166.384618 km (entry 07:29:12.180) and 150.965896 km (entry 06:24:45.375); all endpoints at lat 88.750844 |
-| S6 | FLT-1006, FLT-1007 × ZN-DATELINE | Antimeridian; hourly segments spanning 180° | 1 pass each: 102.798115 km (entry (61.736781, −178.898277) 03:48:26.257, exit (61.319411, 179.371275)) and 111.118326 km (entry 04:26:18.730) |
+| S3 | FLT-1003 × ZN-PITUFFIK | Great-circle bulge inside a 2,550 km reporting gap; no position report inside | 1 pass `crossing`→`crossing`: entry (76.477753, −66.933657) 13:26:53.336, exit (76.698331, −70.350698) 13:33:20.722, 91.466229 km. Planar lerp passes 469.6 km from the centre and misses |
+| S4 | FLT-1003 × ZN-BAFFIN | Ghost zone: only planar code hits | **No pass**. The great circle is 476.4 km from the centre (r 111.12); planar lerp passes 0.10 km from it |
+| S5 | FLT-1004, FLT-1005 × ZN-POLE | Polar zone at (90, 0) | 1 pass each: 166.384618 km (entry 07:29:12.181) and 150.965896 km (entry 06:24:45.375); all endpoints at lat 88.750844 |
+| S6 | FLT-1006, FLT-1007 × ZN-DATELINE | Antimeridian; hourly segments spanning 180° | 1 pass each: 102.798115 km (entry (61.736781, −178.898277) 03:48:26.257, exit (61.319411, 179.371275)) and 111.118326 km (entry 04:26:18.731) |
 | S7 | FLT-1008 × TFR-101 | Tangent, miss −0.001 m | 1 pass `touch`/`touch` at (54.003101, −16.581974) 11:37:30.000, 0 km |
 | S8 | FLT-1009 × TFR-102 | Near miss, +5.041 m outside | **No pass** |
-| S9 | FLT-1009 × TFR-103 | Graze, 5.039 m inside, no sample inside | 1 pass `crossing`→`crossing`, 0.863979 km, 12:13:23.212–12:13:26.787 |
-| S10 | FLT-1010 × ZN-SURVEY | A vertex exactly on the boundary | 3 passes: 14.838807, 18.519983, 14.781798 km; pass 2 exits at the vertex (51.000000, −3.132329) 08:15:29.999 |
-| X1 | FLT-1001 × FLT-1002 | Identical route flown in opposite directions | Exactly 2 rows: `overlap_start` (51.47, −0.4543) [1001 09:00:00, 1002 19:14:20], `overlap_end` (40.6413, −73.7781) [1001 15:17:43, 1002 13:05:00]; no crossings |
+| S9 | FLT-1009 × TFR-103 | Graze, 5.039 m inside, no position report inside (two 0.5 km samples are 3.351 m inside) | 1 pass `crossing`→`crossing`, 0.863979 km, 12:13:23.212–12:13:26.787 |
+| S10 | FLT-1010 × ZN-SURVEY | A vertex exactly on the boundary | 3 passes: 14.838807, 18.519983, 14.781798 km; pass 2 exits at the vertex (51.000000, −3.132329) 08:15:30.000 (2.9 cm before vertex 3) |
+| X1 | FLT-1001 × FLT-1002 | Identical route flown in opposite directions | Exactly 2 rows: `overlap_start` (51.47, −0.4543) [1001 09:00:00, 1002 19:14:20], gap 36860.0 s; `overlap_end` (40.6413, −73.7781) [1001 15:17:43, 1002 13:05:00], gap 7963.0 s; no crossings |
 | X2 | FLT-1008 × FLT-1009 | Shared waypoint passed 30 s apart (vertex–vertex crossing) | Exactly 1 crossing (55.0, −45.0), 13:41:58 / 13:42:28, `time_gap_s` 30.0 |
-| X3 | FLT-1004 × FLT-1005 | Crossing near the pole | (88.712001, −108.768698), gap 4661.8 s |
-| X4 | FLT-1006 × FLT-1007 | Crossing where both segments span 180° | (61.822942, −178.523172), gap 2276.4 s |
-| X5 | FLT-1001 × FLT-1008; FLT-1002 × FLT-1008 | Ordinary crossings | (53.132767, −11.781169) gap 4857.8 s; (53.132768, −11.781174) gap 25601.2 s |
+| X3 | FLT-1004 × FLT-1005 | Crossing near the pole | (88.712001, −108.768698), gap 4661.85 s |
+| X4 | FLT-1006 × FLT-1007 | Crossing where both segments span 180° | (61.822942, −178.523172), gap 2276.385 s |
+| X5 | FLT-1001 × FLT-1008; FLT-1002 × FLT-1008 | Ordinary crossings | (53.132767, −11.781169) gap 4857.802 s; (53.132768, −11.781174) gap 25601.161 s |
 | X6 | FLT-1003 × FLT-1007 | Shared endpoint (PANC) | 1 crossing (61.1743, −149.9982), gap 52974.0 s |
-| X7 | FLT-1008 × FLT-1010 | Incidental crossing | (50.950078, −3.147727), gap 9024.9 s |
+| X7 | FLT-1008 × FLT-1010 | Incidental crossing | (50.950078, −3.147727), gap 9024.867 s |
 | X8 | FLT-1001 × FLT-1009 | Non-crossing pair (westbound tracks, never closer than 139.1 km) | **No rows**. The other 36 pairs not listed in X1–X7 also have no rows |
 
 **Totals:** 14 zone passes and 9 intersection rows (2 overlap + 7 crossings).
@@ -1351,6 +1484,10 @@ Prototype values come from `gen_v2.py`, a modified copy of geo's verified genera
 | after analyze: `api_get.py /trajectories/FLT-1003` | `"distance_inside_km":91.466229…` (ZN-PITUFFIK); no ZN-BAFFIN entry |
 | after analyze: `api_get.py /zones/ZN-BAFFIN` | `"pass_count":0` |
 | after analyze: `api_get.py /trajectories/FLT-1009` | contains `"time_gap_s":30.0` |
+| after analyze: `api_get.py /trajectories/FLT-1003`, `length_km` and the `time` keys | `"length_km":5424.514271…`, then the ZN-PITUFFIK entry `"time":"2024-05-01T13:26:53.336…Z"` and exit `"time":"2024-05-01T13:33:20.722…Z"` |
+| `ingest_runs` rows after runs 1 and 2: `(id, status, seen, inserted, unchanged, rejected)` | `[(1, 'succeeded', 26, 20, 0, 5), (2, 'succeeded', 26, 0, 20, 5)]` |
+| `ingest_rejections` rows with `entity = 'file'` | `[]` (no data file rejected whole) |
+| Human step 7.a reason-code counts of one re-ingest | 1 `invalid_timestamp`, 1 `missing_field`, 2 `out_of_range`, 1 `too_few_points` |
 
 Rejection rows after run 1, in order: `(flights.json, 10, FLT-1011, too_few_points)`, `(flights.json, 11, FLT-1012, out_of_range)`, `(flights.json, 12, FLT-1013, invalid_timestamp)`, `(flights.json, 13, null, missing_field)`, `(zones.json, 10, ZN-CHANNEL, out_of_range)`. The duplicate is index 14, FLT-1004. File names here and in the key are basenames. `ingest_rejections.source_file` stores the path as given (`data/flights.json`), so comparisons use `Path(source_file).name`.
 
@@ -1370,7 +1507,7 @@ Rejection rows after run 1, in order: `(flights.json, 10, FLT-1011, too_few_poin
   - Refine every local minimum of the sampled g by golden-section search (80 steps).
     - If |g_min| ≤ 0.001 km, it is a touch: one pass with entry = exit at the minimum, both kinds `touch`.
     - **The touch rule takes precedence.** Discard any roots bracketed around that minimum. S7 dips about 1 mm inside (sampled minimum −0.0013 m), and 0.5 km sampling brackets two sign changes about 19 m apart that would otherwise make a crossing pass.
-    - If g_min < −0.001 km with no bracketed sign change, bisect the two roots on either side of the minimum (catches S9).
+    - If g_min < −0.001 km and the minimum's sample and both neighbours are outside (a dip narrower than the sampling step), bisect the two roots on either side of the minimum. A safety net: it fires nowhere in the practice data (S9's 0.864 km chord holds two samples, 3.351 m inside, so ordinary sign changes bracket it; verified by instrumenting the generator).
   - Merge inside intervals that meet at a vertex (gap ≤ 1 m). Label kinds as in §6.g.
   - Times and altitudes are linear in the segment fraction.
 - **Crossings ("sampling + local refinement").**
@@ -1387,8 +1524,10 @@ Rejection rows after run 1, in order: `(flights.json, 10, FLT-1011, too_few_poin
 **Self-check report** (stdout), one line per scenario:
 - format: `S7 PASS touch at (54.003101,-16.581974) 11:37:30Z`;
 - 25 lines (D1–D7, S1–S10, X1–X8);
-- then `FOUND SET == EXPECTED SET` for passes and intersections;
+- then `FOUND SET == EXPECTED SET` for passes and intersections (the line also compares the per-trajectory, per-zone and after-analysis counts);
 - last line `SELF-CHECK OK (25 scenarios)`, exit 0; any FAIL exits 1.
+
+The S4 line gives the straight lat/lon line's closest approach to ZN-BAFFIN refined by golden-section search between the best of 20,000 samples and its neighbours: 0.10 km (0.0997 km). Until 2026-10-08 it printed the best sample alone, 0.11 km, a sampling artifact whose check window [0.10, 0.12] excluded the true value. The data files and the key did not change (DATA-SPEC §2 hashes).
 
 **`practice/answer_key.json`:**
 
@@ -1424,7 +1563,7 @@ Rejection rows after run 1, in order: `(flights.json, 10, FLT-1011, too_few_poin
 ```
 
 **Rules for the key:**
-- Times are ISO-8601 UTC with `Z` and millisecond precision. Distances are in km to 6 decimals; positions to 6 decimals.
+- Times are ISO-8601 UTC with `Z`, rounded to the millisecond (`.000` omitted on whole seconds, as in `2024-05-01T09:00:00Z`). Distances are in km to 6 decimals; positions to 6 decimals; `duration_s` and `time_gap_s` to 3 decimals.
 - Rows are sorted by (trajectory_id, zone_id, seq) and by (trajectory_ids, sequence along the smaller id).
 - **Tolerances:** position ≤ 1 m by great-circle distance, time ≤ 1 s, distance ≤ 1 m; kinds and counts exact. The overlap direction is accepted either way.
 - The candidate-only checker `practice/check_answer_key.py` is written in Step C. It replays runs 1–2, runs analyze, compares API/DB results with the key, and prints PASS/FAIL per item.
@@ -1470,7 +1609,8 @@ Rejection rows after run 1, in order: `(flights.json, 10, FLT-1011, too_few_poin
 - whether to expose altitude (the altitude-aware length is a bonus);
 - performance at scale;
 - authentication (out of scope);
-- whether to expose run history.
+- whether to expose run history;
+- conflicting reports (same time, different position) and conflicting duplicates (same key, different content): the design rejects them (`conflicting_points`, `duplicate_key_conflict`), the practice data has none, and the candidate records the choice in PLAN §10 (playbook E.7 question 3). The same holds for a record whose only two reports are exact duplicates: "two position reports" literally, but `too_few_points` under §6.d's "fewer than 2 distinct positions". Adding these to the brief would hint at traps that are not there.
 
 **Must NOT be ambiguous**, because the answer key depends on it, so the brief states it:
 - the sphere and its radius, and the unit factors;
@@ -1541,40 +1681,38 @@ git add -A && git commit -m "..."
 **Writer rules:**
 1. **One extension** (§2.2): `#### Human step N.x — <title> (no AI)` followed by one ```bash block. It sits directly before the prompt or Verify it precedes.
 2. **Placeholders** appear only in ```text blocks and only from §3.1. "Practice values:" lists each placeholder used in that prompt as `NAME=value`, with no `<>`. The body of a quoted heredoc (`<<'EOF'`) in a bash block, such as Human step 0.b's PLAN.md skeleton, is literal text and may contain `<NAME=value>`.
-3. **Every prompt** follows the §5.4 contract (READ / CHANGE ONLY / TASK / DONE WHEN / Agent rules), starts with its `[P<N>.<k> — <title>] (model: …)` line, and is followed by the sentence "Then run the gate and log the prompt (top section)." P2.1 and P6.3 instead get "Then run `gate lint`; log and commit after Human step 2.b (6.a)."
+3. **Every prompt** follows the §5.4 contract (READ / CHANGE ONLY / TASK / DONE WHEN / Agent rules, plus the DELTA item where §5.4 lists it), starts with its `[P<N>.<k> — <title>] (model: …)` line, and is followed by its two-line "After" bash block: `gate`, then `ailog <id> <model> "<ask>" "<verified by>" accepted && git add -A && git commit -qm "<its commit message>"` (§5.4 step 3). P2.1 and P6.3 instead get "Then run `gate lint`; log and commit after Human step 2.b (6.a)." Phase 0's prompts have no `gate` line (no uv yet). A prompt with day-of edits says so in one "On the day:" line after its practice values.
 4. **Exact names:** every name, path, signature and expected value comes from §6/§7. Specs marked verbatim (§6.g blocks, §5.7) are pasted unchanged.
 5. **Verify blocks** use only bounded commands. No server is started outside `scripts/smoke.py`. Each command has its expected practice result in a trailing comment.
 6. **Phase titles**, exactly: 0 Orient and plan; 1 Project setup; 2 Database models and migrations; 3 JSON ingestion; 4 Read-only API; 5 Structured logging; 6 Geospatial analysis; 7 Tests and verification. Minutes as in §4.1.
 7. **Code in the playbook** (the "no prebuilt code" ground rule). Prompts specify behaviour.
    - Literal code appears only where it pins a verified library trap, at most about 12 lines each: the `NAMING` convention, `render_item`, the logging processor lists.
    - `verify.sh` is specified as a numbered list of exact commands, not pasted as a file.
-   - Human-pasted blocks are configuration and tooling only: the pyproject block, `.env`, `gate`, the PLAN skeleton.
+   - Human-pasted blocks are configuration and tooling only: the pyproject block, `.env`, `gate`, the session helpers `m` and `ailog`, the PLAN skeleton.
+   - No pasted program beyond these: a recompute for a changed Earth radius is a logged large-model ask (Appendix E.4), with the 6371.0088 outputs as its check.
 
 ### 9.2 Top section (before Phase 0; writer A)
 
+The top section is read before the session starts, so it must fit a 5-minute read (Step A coverage critique: it had grown to 5,300 words). Reference material moves into the appendices, and each of the Conventions block and `gate` has one copy, in the human step that pastes it.
+
 1. **How to use this playbook** (≤ 10 lines).
-   - Paste the prompts in order. Run every Verify yourself.
-   - Placeholders carry practice values, so change only the values on the day.
+   - Paste the prompts in order, each into the model it names. Run every Verify yourself.
+   - Placeholders carry the practice values. On the day, PLAN.md §3's "Placeholder values" table wins over a stale value (Conventions line 1); overwrite the values anyway, and make the day-of edits that placeholders cannot carry (Appendix E.1). Never send a prompt before its day-of edits are done.
    - PLAN.md is the shared memory.
    - One sentence on rule 7: the playbook carries prompts, specs and tooling, not prebuilt service code.
-2. **Session setup**: the §3.3 export lines and the §5.4 `gate` function, including `gate lint`.
-3. **Time budget**: the §4.1 table, the §4.2 tripwires, the §4.3 cut list with minutes, and the §4.4 never-cut core.
-4. **Model routing**: the §5.1 table and §5.2 escalation, including calibration at minute 30.
-5. **Token rules**: §5.3.
-6. **Prompt contract, kickoff header and gate**: §5.4.
-7. **AI-use habits the grader wants to see:**
-   - plan first; the AI never sees raw data;
-   - every prompt names its model and reason, its files and its done-when;
-   - expected test values exist before code, and `git diff --stat -- tests/` proves they were never edited;
-   - migrations are reviewed by a human (`Reviewed:` line);
-   - the gate runs after every prompt;
-   - AI_LOG.md rows and commit tags;
-   - escalation by rule, hand fixes of ≤ 5 lines;
-   - fresh chats and short failure tails.
-8. **Human-only steps**: §5.6.
-9. **AI log format and commit tags**: §5.5.
-10. **Placeholders and PLAN.md**: the §3.1 table and the §3.2 skeleton.
-11. **Conventions block to paste**: §5.7, verbatim.
+2. **Before you start (5-minute read)**: at most 900 words. The method in one paragraph; the per-prompt routine (day-of edits and `grep -nE '^([-*] )?DELTA:' PLAN.md`; a fresh chat gets the kickoff header and its first prompt in one message; `gate`; the "After" line); the clock (`m`); then the §4.5 run sheet.
+3. **Session setup**: the §3.3 exports and helpers (`T0`, `m`, `ailog`), and a pointer to `gate` in Human step 1.a (its only copy).
+4. **Time budget**: the §4.1 table, the §4.2 tripwires, the §4.3 cut list with minutes, and the §4.4 never-cut core. The playbook's cut list may drop the "Also change" column, because each affected prompt carries its own cut note.
+5. **Model routing**: the §5.1 table (the "Why" column may be dropped, because each prompt has a "Why" line) and §5.2 escalation, including calibration at minute 30.
+6. **Token rules**: §5.3.
+7. **Prompt contract, kickoff header and gate steps**: §5.4, with the DELTA item and gate step 0. The `gate` function itself stays in Human step 1.a.
+8. **AI log and commit tags**: §5.5.
+
+Moved out of the top section:
+
+- **Placeholders and PLAN.md** (the §3.1 table, the §3.2 skeleton and the DELTA rule) → Appendix E, before E.1.
+- **AI-use habits the grader wants to see** (plan first, the AI never sees raw data; every prompt names its model and reason, files and done-when; expected test values before code, proven by `git diff --stat -- tests/`; human-reviewed migrations; the gate after every prompt; AI_LOG.md rows and commit tags; escalation by rule, hand fixes of ≤ 5 lines; fresh chats and short failure tails) and **Human-only steps** (§5.6) → Appendix F, before its recovery library.
+- **The Conventions block** appears once, verbatim from §5.7, in Human step 0.b's PLAN.md heredoc (the copy that is pasted). Wherever the playbook names it, it says "pasted from Human step 0.b's heredoc; edit it there".
 
 ### 9.3 Phases (per phase: content to write; expected values from §7.6)
 
@@ -1583,32 +1721,40 @@ git add -A && git commit -m "..."
 - **Model:** mixed.
 - **Done when:** DATA_PROFILE.md, PLAN.md (11 sections) and AI_LOG.md are committed, the coordinate order is proven by a landmark, and the DB decision is made.
 
-Human step 0.a — Read the brief and check the environment:
+Human step 0.a — Start the clock, send P0.1, read the brief, check the environment. Run the first five lines, send Prompt 0.1 to a fresh small-model chat (kickoff header and prompt in one message), then read the brief and run the rest while it works:
 ```bash
+export T0=$(date +%s); echo "export T0=$T0" >> ~/session.sh   # session clock: tripwire minutes count from here (m prints them)
+m() { echo $(( ($(date +%s) - T0) / 60 )); }        # elapsed minutes
+ailog() { [ $# -eq 5 ] || { echo "usage: ailog PROMPT MODEL ASK VERIFIED_BY OUTCOME"; return 1; }; printf '| %s | %s | %s | %s | %s | %s |\n' "$(m)" "$@" >> AI_LOG.md; }
 export BRIEF=INSTRUCTIONS.md DATA_DIR=data
-cat "$BRIEF"                                           # read it yourself (3 min)
-ls -la "$DATA_DIR"; python3 --version; uv --version || echo "NO UV"   # Python 3.12.3, uv 0.11.16
+ls -la "$DATA_DIR"                                     # flights.json, zones.json; now send Prompt 0.1
+cat "$BRIEF"                                           # read it yourself (3-5 min); unless already settled, ask the interviewer: "I prepared prompt templates and a checklist, no code; may I use them?"
+python3 --version; uv --version || echo "NO UV"        # Python 3.12.3, uv 0.11.16
 git branch --show-current || echo "NO GIT REPO"        # development (none: git init)
 git config user.email || echo "NO GIT IDENTITY"         # an address (none: set user.name and user.email)
-pg_isready -h localhost -p 5432 || echo "NO POSTGRES ON 5432"        # accepting connections
-PGPASSWORD=gis psql -h localhost -U gis -d gis -tAc "select 1" || echo "NO PSQL ACCESS"   # 1
-PGPASSWORD=gis psql -h localhost -U gis -d gis_test -tAc "select 1" || echo "NO TEST DB"   # 1 (none: Appendix D)
-env | grep -iE 'database|postgres|^pg' || true
+env | grep -iE 'database|postgres|^pg' || true          # DB settings the environment provides (before the exports below)
+export PGHOST=localhost PGPORT=5432 PGUSER=gis PGPASSWORD=gis PGDATABASE=gis TEST_DB=gis_test   # the brief's database values
+pg_isready || echo "NO POSTGRES"                       # localhost:5432 - accepting connections
+PGCONNECT_TIMEOUT=5 psql -tAc "select 1" || echo "NO PSQL ACCESS"            # 1 (database does not exist: createdb, Appendix D)
+PGCONNECT_TIMEOUT=5 psql -d "$TEST_DB" -tAc "select 1" || echo "NO TEST DB"  # 1 (none: createdb, Appendix D)
 ```
 
-Every gate and checkpoint commits, and conftest refuses a test URL without `test` in its database name, so the git and test-DB lines matter as much as the server check.
+Every gate and checkpoint commits, and conftest refuses a test URL without `test` in its database name, so the git and test-DB lines matter as much as the server check. A server that answers while a database is missing gets `createdb` (Appendix D), not SQLite.
 
-- **Prompt 0.1 — Data profiler (small).** CHANGE ONLY `scripts/profile_data.py`. TASK: the §6.i spec; "do not open the data files yourself"; lines ≤ 100 characters; catch only specific exceptions (`OSError`, `json.JSONDecodeError`). DONE WHEN: `python3 scripts/profile_data.py <DATA_DIR=data>/*.json | head -30` shows both file sections.
+- **Prompt 0.1 — Data profiler (small).** Sent at minute 1, before the reading. READ: nothing (PLAN.md does not exist yet; the prompt is the whole spec). CHANGE ONLY `scripts/profile_data.py`. TASK: the §6.i spec, including the map rule, the broadened repeated-key rule and `epoch s` / `epoch ms`; "do not open the data files yourself"; lines ≤ 100 characters; catch only specific exceptions (`OSError`, `json.JSONDecodeError`). DONE WHEN: `python3 scripts/profile_data.py <DATA_DIR=data>/*.json | grep '^## '` shows one heading per data file.
 - **Human step 0.b — Landmark check, PLAN skeleton, AI log, sample ids.**
-  - Run `python3 scripts/profile_data.py "$DATA_DIR"/*.json > DATA_PROFILE.md`, then `grep -E 'coord\[|coordinates\[' DATA_PROFILE.md`. `coord[0]` spans −166.2..178.3, beyond ±90, so it is longitude; the example `[-0.4543, 51.47]` is London. The order is `[lon, lat]`.
-  - Write the PLAN.md skeleton (§3.2), with §1 from §5.7, and the AI_LOG.md header (§5.5). Use quoted heredocs (`cat > PLAN.md <<'EOF'`), which keep `<NAME=value>` literal.
+  - Run `python3 scripts/profile_data.py "$DATA_DIR"/*.json > DATA_PROFILE.md`, then the generic greps `grep -iE '^\| [^|]*(lat|lon|coord)' DATA_PROFILE.md` and `grep -iE '^\| [^|]*(alt|radius|unit)' DATA_PROFILE.md`, and `grep -E 'repeated keys|timestamp forms' DATA_PROFILE.md`. Practice: `coord[0]` spans −166.2..178.3, beyond ±90, so it is longitude; the example `[-0.4543, 51.47]` is London; the order is `[lon, lat]`. Repeated keys `flight_id FLT-1004 x2, callsign PRAC104 x2`; timestamp forms Z 141, ±HH:MM 41, epoch s 28.
+  - The landmark rule: if one index goes beyond ±90, it is the longitude; otherwise (regional data, or named fields) the landmark decides: name the place and both values.
+  - Write the PLAN.md skeleton (§3.2), with §1 from §5.7, and the AI_LOG.md header (§5.5). Use quoted heredocs (`cat > PLAN.md <<'EOF'`), which keep `<NAME=value>` literal. This heredoc is the playbook's only copy of the Conventions block.
+  - Log P0.1 with `ailog P0.1 small "stdlib data profiler" "ran it; coordinate order proven by a landmark" accepted` (change the outcome if it needed a retry), and commit.
   - Export the sample ids (§3.3): `export SAMPLE_TRJ=FLT-1003 SAMPLE_ZONE=ZN-POLE`, ids taken from DATA_PROFILE.md.
-- **Prompt 0.2 — PLAN.md (large).**
+- **Prompt 0.2 — PLAN.md (large).** Sent at minute 8; compare DATA_PROFILE.md with the brief while it runs.
   - READ: `<BRIEF=INSTRUCTIONS.md>`, `DATA_PROFILE.md`, PLAN.md §1.
   - CHANGE ONLY: `PLAN.md`.
   - TASK:
     - fill §2–§11 under the exact headings, ≤ 180 lines;
-    - §3 from the profile only; never open `<DATA_DIR=data>` files;
+    - §3 from the profile only; never open `<DATA_DIR=data>` files; the coordinate layout `<COORD_ORDER=[lon, lat]>` with its proof (if one index goes beyond ±90 it is the longitude; otherwise the landmark decides: name the place and both values); each natural key with its JSON type;
+    - §3 ends with the "Placeholder values" table (`NAME | value`) for every §3.1 name except `BRIEF`: `DATA_DIR`, `DB_URL`, `TEST_DB_URL`, `TRAJECTORY_SOURCE`, `POINT_SOURCE`, `POINT_ATTRS`, `ZONE_SOURCE`, `TRAJECTORY_ATTRS`, `ZONE_ATTRS`, `COORD_ORDER`, `TIME_FORMATS`, `ALT_UNIT`, `RADIUS_UNITS`, `EARTH_RADIUS_KM`, `TOL_KM` and `SAMPLE_TRJ` (the `ATTRS` values with their column types, as in §3.1);
     - §4–§8 = the DEFAULT DESIGN block below plus `DELTA:` lines for brief-specific changes; §7 lists every event of its Logging line with level and fields;
     - §8 with the `TOL_KM` arithmetic; §10 with ≤ 5 interviewer questions; §11 a checklist.
   - DONE WHEN: `grep -c '^## ' PLAN.md` → `11`.
@@ -1618,7 +1764,7 @@ Every gate and checkpoint commits, and conftest refuses a test URL without `test
 ```text
 DEFAULT DESIGN (keep unless the brief requires a change; record each change as "DELTA: ...")
 - Names: tables trajectories (+ trajectory_points) and zones; natural keys trajectory_id, zone_id (String(64) UNIQUE); surrogate integer id PKs; FKs named <x>_pk.
-- 0001: ingest_runs (status, files JSON, seen/inserted/updated/unchanged/duplicates/rejected, CHECK seen = sum when succeeded), ingest_rejections (reason_code, detail, payload), trajectories (descriptive columns from §3, started_at, ended_at, point_count >= 2, content_hash), trajectory_points (PK trajectory_pk+seq; ts, lat, lon, alt_m; UNIQUE trajectory_pk+ts), zones (center_lat, center_lon, radius_km in (0, 10000), content_hash).
+- 0001: ingest_runs (status, files JSON, seen/inserted/updated/unchanged/duplicates/rejected, CHECK seen = sum when succeeded), ingest_rejections (reason_code, detail, payload), trajectories (descriptive columns from §3, started_at, ended_at, point_count >= 2, content_hash), trajectory_points (PK trajectory_pk+seq; ts, lat, lon, alt_m, point columns from §3; UNIQUE trajectory_pk+ts), zones (descriptive columns from §3, center_lat, center_lon, radius_km in (0, 10000), content_hash).
 - 0002: analysis_runs (algorithm_version, earth_radius_km, tol_km, counts), trajectory_metrics (length_km, length_3d_km, duration_s, zone_pass_count, intersection_count, input_hash), zone_passes (entry/exit kind, lat, lon, time, alt_m; distance_inside_km, duration_s), trajectory_intersections (a_pk < b_pk; kind crossing|overlap_start|overlap_end; lat, lon; time_a, time_b, time_gap_s).
 - Ingestion: `gisdb ingest [PATH...]`; one run row per call; normalize to UTC, degrees (lat, lon), km, m; sort and de-duplicate points; sha256 of the normalized record; insert/update/unchanged by natural key; exact duplicates counted; rejections with codes invalid_file, missing_field, invalid_value, out_of_range, invalid_timestamp, too_few_points, conflicting_points, duplicate_key_conflict.
 - API (GET only, no prefix): /health, /trajectories (limit 1-500 default 50, offset, started_after, started_before), /trajectories/{trajectory_id}, /trajectories/{trajectory_id}/points, /zones, /zones/{zone_id}; envelope {items, total, limit, offset}; 404 {"detail": "<entity> '<id>' not found"}; analysis fields present and null until analyzed.
@@ -1626,13 +1772,18 @@ DEFAULT DESIGN (keep unless the brief requires a change; record each change as "
 - Analysis: sphere R = <EARTH_RADIUS_KM=6371.0088> km; n-vectors; great-circle length; zone passes with entry/exit kinds crossing|track_start|track_end|touch (1 m band); trajectory intersections with both times (constant speed per segment); overlaps as start/end rows; full recompute in one transaction; TOL_KM = <TOL_KM=0.001>.
 ```
 
-- **Verify 0** (the section-scoped greps cannot pass on the §1 Conventions alone):
+- **Verify 0** (the section-scoped greps cannot pass on the §1 Conventions alone, and none depends on practice values):
   - `grep -c '^## ' PLAN.md` → `11`;
-  - `awk '/^## 3\./,/^## 4\./' PLAN.md | grep -cE 'lon, ?lat|feet|NM'` → ≥ 3;
-  - `awk '/^## 8\./,/^## 9\./' PLAN.md | grep -c 6371.0088` → ≥ 1;
+  - `awk '/^## 3\./,/^## 4\./' PLAN.md | grep -cE 'COORD_ORDER|TIME_FORMATS|ALT_UNIT|RADIUS_UNITS'` → ≥ 4 (the "Placeholder values" table is in §3);
+  - `awk '/^## 8\./,/^## 9\./' PLAN.md | grep -cE '[0-9]{4}(\.[0-9]+)? ?km'` → ≥ 1 (the Earth radius; practice 6371.0088 km);
+  - `awk '/^## 8\./,/^## 9\./' PLAN.md | grep -c 'TOL_KM'` → ≥ 1;
   - `grep -c 'ingest.record.duplicate' PLAN.md` → ≥ 1 (the full event catalogue reached §7);
+  - `grep -c '^- \[ \] Phase [0-7]:' PLAN.md` → `8`;
+  - `grep -nE '^([-*] )?DELTA:' PLAN.md || echo "no DELTA"` → practice: `no DELTA` (or only `DELTA: none` lines);
   - `head -5 AI_LOG.md` → the header and the P0.1/P0.2 rows.
-- **If it fails:** "PLAN.md §3 is wrong: DATA_PROFILE.md shows positions[].coord[0] spanning −166..178, so coord is [lon, lat]; radius carries its unit in properties.radius_unit (NM or km); alt_ft is feet. Fix §3 and §8 only."
+
+  Then the 2-minute review by direct edit: §2 lists every numbered ask; §3's coordinate proof, units, time forms, keys and "Placeholder values" table match the profile; each DELTA names the brief requirement behind it; §8 maps every analysis requirement to a table and an API field; §9's URLs match the environment check; §10 holds at most 5 questions (ask the top one now). Finally mark the last-resort cuts (§4.3): every cut or tripwire skip that would remove an R-numbered requirement of §2 (practice: cuts 7 and 9 and the tripwire-87 skip of P4.2), written into PLAN §10.
+- **If it fails:** "PLAN.md §3 is wrong. DATA_PROFILE.md's coordinate rows prove the layout <COORD_ORDER=[lon, lat]> (if one index goes beyond ±90 it is the longitude; otherwise the landmark decides). The radius and its unit are <RADIUS_UNITS=…>; the altitude is <ALT_UNIT=alt_ft in feet (x 0.3048 → alt_m), may be null>. Fix §3 and §8 only."
 - **Talking points:**
   - PLAN.md is context compression.
   - I read the brief myself; the models saw a profile, not raw data.
@@ -1645,7 +1796,7 @@ DEFAULT DESIGN (keep unless the brief requires a change; record each change as "
 - **Done when:** `ruff` is clean, `pytest` gives 1 passed, and `/health` says the database is ok.
 
 Steps:
-- **Human step 1.a:** the bash of §6.a (including the `.gitignore` line), the pyproject block, the `ruff` pass over `scripts/`, `.env.example` (§6.b), `cp .env.example .env`, and the `gate` function.
+- **Human step 1.a:** the bash of §6.a (including the `.gitignore` line), the pyproject block, the `ruff` pass over `scripts/`, `.env.example` (§6.b), `cp .env.example .env`, the `gate` function (its only copy); commit `[human]`. Do not run `gate` before P1.1: it fails with T201 on uv's template `src/gisdb/__init__.py` until P1.1 replaces it.
 - **Prompt 1.1 — Project skeleton (small).**
   - READ: PLAN.md §1, §9, `pyproject.toml`.
   - CHANGE ONLY: `src/gisdb/__init__.py`, `src/gisdb/config.py`, `src/gisdb/db.py`, `src/gisdb/logging_config.py`, `src/gisdb/api/__init__.py`, `src/gisdb/api/app.py`, `src/gisdb/cli.py`, `scripts/api_get.py`, `tests/test_health.py`, `pyproject.toml` (the `[project.scripts]` line only).
@@ -1654,9 +1805,10 @@ Steps:
     - §6.f basic logging;
     - `create_app()` with `/health` (§6.e, tag `health`; catch `sqlalchemy.exc.SQLAlchemyError`, not `Exception`), logging `app.startup`;
     - `cli.main(argv=None) -> int` with `serve` only (`log_config=None, access_log=False`) and the `__main__` guard;
-    - `api_get.py` per §6.i;
+    - `api_get.py` per §6.i (imports inside `main()`: TestClient, a blank line, then app);
     - `test_health_ok`.
   - DONE WHEN: `uv run ruff check . && uv run pytest -q` → `1 passed`.
+  - On the day, while P1.1 runs (minutes 19–27): the day-of edits of P2.1 and P3.1 (Appendix E.1).
 - **Verify 1:**
   - `uv run ruff check . && uv run pytest -q` → `All checks passed!` … `1 passed`.
   - `uv run python scripts/api_get.py /health` → `200 /health {"database":"ok","status":"ok"}`.
@@ -1680,17 +1832,20 @@ Steps:
   - READ: PLAN.md §1, §3, §4, `src/gisdb/db.py`, `migrations/env.py`.
   - CHANGE ONLY: `src/gisdb/models.py`, `migrations/env.py`, `tests/conftest.py`, `tests/test_migrations.py`.
   - TASK:
-    - the §6.c header and the five 0001 models, with columns, constraints and indexes exactly as given (descriptive columns `<TRAJECTORY_ATTRS=…>`, `<ZONE_ATTRS=…>`);
+    - the §6.c header and the five 0001 models, with columns, constraints and indexes exactly as given; descriptive columns per `<TRAJECTORY_ATTRS=…>`, `<ZONE_ATTRS=…>` and `<POINT_ATTRS=none>`, typed as their values say, all NULL (the former type parenthetical is gone);
+    - every line at most 100 characters (ruff E501 applies to `src/`): the `accounting` and `reason_code_valid` CHECK texts as implicitly concatenated string pieces;
     - `env.py` per §6.c, with `render_item`, the `configure_logger` guard and `get_url`;
     - `conftest.py` per §6.h;
-    - the 4 tests of `test_migrations.py`;
+    - the 4 tests of `test_migrations.py` (`test_round_trip` with its own Config and `configure_logger` False, §6.h);
     - "Do NOT create migration files; when done, tell me to run autogenerate."
-  - DONE WHEN: `uv run python -c "import gisdb.models"` exits 0.
+    - the DELTA item (§5.4) for PLAN §3 and §4.
+  - DONE WHEN: `uv run python -c "import gisdb.models" && uv run ruff check src tests migrations/env.py` → exit code 0, `All checks passed!`.
+  - On the day, while P2.1 runs (minutes 31–40): the day-of edits of P3.2, P4.1 and P4.2 (types, mandated paths).
   - Then `gate lint` only: pytest stays red until 0001 exists. No AI_LOG row or commit yet (§5.4 exceptions).
 - **Human step 2.b:**
   - Run `uv run alembic revision --autogenerate -m "core schema" --rev-id 0001`, then `uv run ruff format -q migrations/versions && uv run ruff check --fix -q migrations/versions`.
-  - Go through checklist §6.c items 1–8 and add `Reviewed: checklist 1-8 OK` to the docstring; item 8 upgrades, runs the round trip and `alembic check`.
-  - Then run the full `gate` (5 passed), append P2.1's AI_LOG row, and commit `P2.1: models, env.py, fixtures; 0001 reviewed [AI: large]`.
+  - Go through checklist §6.c items 1–8 (its counts are labelled practice: plus one per PLAN §4 DELTA table) and add `Reviewed: checklist 1-8 OK` as docstring line 3 with `sed -i '2a …'` (§6.c); item 8 upgrades, runs the round trip and `alembic check`.
+  - Then run the full `gate` (5 passed), then `ailog P2.1 large …` and commit `P2.1: models, env.py, fixtures; 0001 reviewed [AI: large]`.
 - **Verify 2:**
   - `uv run alembic current` → `0001 (head)`.
   - `uv run alembic downgrade base && uv run alembic upgrade head && uv run alembic check` → `No new upgrade operations detected.`
@@ -1716,17 +1871,21 @@ Steps:
 - **Prompt 3.1 — Record parsing and normalization (large).**
   - READ: PLAN.md §1, §3, §5, `DATA_PROFILE.md`.
   - CHANGE ONLY: `src/gisdb/records.py`, `tests/test_records.py`.
-  - TASK: the `records.py` part of §6.d, using `<TRAJECTORY_SOURCE=…>`, `<POINT_SOURCE=…>`, `<ZONE_SOURCE=…>`, `<TRAJECTORY_ATTRS=…>`, `<ZONE_ATTRS=…>`, `<COORD_ORDER=[lon, lat]>`, `<TIME_FORMATS=…>`, `<ALT_UNIT=…>`, `<RADIUS_UNITS=…>`; the 16 tests of §6.h with their expected values written into the prompt; no DB.
-  - DONE WHEN: `uv run pytest -q tests/test_records.py` → `16 passed`.
+  - TASK: the `records.py` part of §6.d, using `<TRAJECTORY_SOURCE=…>`, `<POINT_SOURCE=…>`, `<POINT_ATTRS=none>`, `<ZONE_SOURCE=…>`, `<TRAJECTORY_ATTRS=…>`, `<ZONE_ATTRS=…>`, `<COORD_ORDER=[lon, lat]>`, `<TIME_FORMATS=…>`, `<ALT_UNIT=…>`, `<RADIUS_UNITS=…>`: record fields one per `ATTRS` column; the conditional time rule and radius-unit rule of §6.d; integer keys through `coerce_numbers_to_str`; the 16 tests of §6.h in their two groups (format-independent, format cases) with their expected values written into the prompt; no DB; the DELTA item for PLAN §3 and §5.
+  - DONE WHEN: `uv run pytest -q tests/test_records.py` → `16 passed` (or the item count of the day's edited list).
+  - On the day (edited while P1.1 runs): rewrite from PLAN §3 the "Shapes" sentence, the practice attribute names (they become the `TRAJECTORY_ATTRS` columns), the time and radius-unit rules if `TIME_FORMATS` or `RADIUS_UNITS` differ in kind, and the 8 format cases, from Appendix E.3's drop-ins. The 8 format-independent items stay as written.
 - **Prompt 3.2 — Ingestion service, CLI, DB tests (large).**
   - READ: PLAN.md §1, §3, §5, §7, `src/gisdb/records.py`, `models.py`, `db.py`, `cli.py`, `tests/conftest.py`.
   - CHANGE ONLY: `src/gisdb/ingest.py`, `src/gisdb/cli.py`, `tests/test_ingest.py`.
-  - TASK: `run_ingest` per §6.d (transactions, Core point replacement, accounting, rejection rows, events); `ingest` (default `<DATA_DIR=data>`) and `stats` subcommands; the 6 tests of §6.h; "reply with the exact counts your tests expect". Under cut 8 (decided at minute 58), the prompt carries the full-refresh variant of §4.3 instead of the hash comparison.
+  - TASK: `run_ingest` per §6.d (transactions, Core point replacement, accounting, rejection rows, events; files in name order unless a PLAN §5 DELTA sets another); `ingest` (default `<DATA_DIR=data>`) and `stats` subcommands; the 6 tests of §6.h; "reply with the exact counts your tests expect"; the DELTA item for PLAN §5 and §7. Under cut 8 (decided at minute 58), the prompt carries the insert-only variant of §4.3: no update branch, no point replacement, and `test_changed_record_updates` expects updated 0, unchanged 5 and the stored callsign unchanged.
   - DONE WHEN: `uv run pytest -q` → `27 passed`.
 - **Verify 3:**
   - `uv run alembic downgrade base && uv run alembic upgrade head`.
   - `uv run gisdb ingest "$DATA_DIR" 2>/dev/null` twice → the run 1 and run 2 lines of §7.6.
   - `uv run gisdb stats 2>/dev/null` → the §7.6 counts.
+  - The rejection rows of run 1, in order (§7.6).
+  - The audit rows (brief requirement 2): `uv run python -c "from sqlalchemy import select; from gisdb.db import SessionLocal; from gisdb.models import IngestRun as R; print(SessionLocal().execute(select(R.id, R.status, R.seen, R.inserted, R.unchanged, R.rejected).order_by(R.id)).all())"` → `[(1, 'succeeded', 26, 20, 0, 5), (2, 'succeeded', 26, 0, 20, 5)]`.
+  - No data file rejected whole: `uv run python -c "from sqlalchemy import select; from gisdb.db import SessionLocal; from gisdb.models import IngestRejection as R; print(SessionLocal().execute(select(R.source_file, R.detail).where(R.entity == 'file')).all())"` → `[]` (a row means a data file was not recognized; Appendix E.8).
   - `uv run pytest -q` → `27 passed`.
 - **If it fails:** "The second ingest run must be a no-op. Compare the content_hash of the normalized record with the stored one before writing; skip unchanged; replace points (Core delete, flush, insert) only when the hash changed. Change ingest.py only; do not touch tests."
 - **Talking points:**
@@ -1735,7 +1894,7 @@ Steps:
   - I reject whole records rather than silently drop points, and I never "fix" swapped coordinates.
 - **Checkpoint 3:** `phase 3: idempotent auditable ingestion [AI: P3.1 L, P3.2 L; human: rerun proof]`.
 
-**Phase 4 — Read-only API (73–93 min).**
+**Phase 4 — Read-only API (73–90 min).**
 - **Goal:** paginated list, detail and points endpoints with response models. The analysis fields are present and null from now on.
 - **Model:** mixed.
 - **Done when:** `test_api.py` gives 8 passed (suite 35) and the api_get checks match.
@@ -1744,12 +1903,13 @@ Steps:
 - **Prompt 4.1 — Trajectory endpoints, the pattern (large).**
   - READ: PLAN.md §1, §6, `src/gisdb/models.py`, `db.py`, `api/app.py`, `tests/conftest.py`.
   - CHANGE ONLY: `src/gisdb/api/schemas.py`, `src/gisdb/api/deps.py`, `src/gisdb/api/routes.py`, `src/gisdb/api/app.py`, `tests/test_api.py`.
-  - TASK: every §6.e model, including the zone and analysis types and `ZoneSummary`'s `center` validator; `trajectories_router` (list with filters, detail, points); include the router and add CORS; the 6 P4.1 tests.
+  - TASK: every §6.e model, including the zone and analysis types and `ZoneSummary`'s `center` validator; one response field per descriptive column, typed from its column (`<TRAJECTORY_ATTRS=…>`, `<ZONE_ATTRS=…>`), and `PointOut` with the `<POINT_ATTRS=none>` fields; `trajectories_router` (list with filters, detail, points); include the router and add CORS; the 6 P4.1 tests, with the CORS assertion and the attribute round trip of §6.h; the DELTA item for PLAN §6.
   - DONE WHEN: `uv run pytest -q tests/test_api.py` → `6 passed`.
+  - On the day, while P4.1 runs (minutes 73–82): the day-of edits of P7.2 and P7.3 (mandated paths, Appendix E.2).
 - **Prompt 4.2 — Zone endpoints (small).**
   - READ: PLAN.md §6, `src/gisdb/api/routes.py`, `schemas.py`, `tests/test_api.py`, `tests/conftest.py` (its tests use `make_zone`, which no earlier test uses).
   - CHANGE ONLY: `src/gisdb/api/routes.py`, `src/gisdb/api/app.py`, `tests/test_api.py`.
-  - TASK: "copy the trajectories pattern exactly" to `zones_router`: `/zones` ordered by `zone_id`, and `/zones/{zone_id}` with 404 `zone '<id>' not found`. Use the existing `ZoneSummary`/`ZoneDetail`; include the router; add the 2 P4.2 tests.
+  - TASK: "copy the trajectories pattern exactly" to `zones_router`: `/zones` ordered by `zone_id`, and `/zones/{zone_id}` with 404 `zone '<id>' not found`. Use the existing `ZoneSummary`/`ZoneDetail`; include the router; add the 2 P4.2 tests; the DELTA item for PLAN §6.
   - DONE WHEN: `test_api.py` → `8 passed`.
 - **Verify 4:**
   - `uv run pytest -q tests/test_api.py` → `8 passed`.
@@ -1761,7 +1921,7 @@ Steps:
   - The large model set the pattern and the small model copied it.
 - **Checkpoint 4:** `phase 4: read-only API [AI: P4.1 L, P4.2 S; human: contract review]`.
 
-**Phase 5 — Structured logging (93–103 min).**
+**Phase 5 — Structured logging (90–100 min).**
 - **Goal:** JSON logs everywhere, request IDs, uvicorn routed through the same JSON, and a JSON 500.
 - **Model:** small.
 - **Done when:** `test_logging.py` gives 3 passed (suite 38) and the `http.request` line carries `request_id` `verify-5`.
@@ -1770,7 +1930,7 @@ Steps:
 - **Prompt 5.1 — Logging and middleware (small).**
   - READ: PLAN.md §1, §7, `src/gisdb/logging_config.py`, `api/app.py`, `cli.py`, `tests/conftest.py`.
   - CHANGE ONLY: `src/gisdb/logging_config.py`, `src/gisdb/api/app.py`, `tests/test_logging.py`.
-  - TASK: the §6.f final recipe, spelled out in the prompt (processors, the marked handler, uvicorn and httpx loggers), the middleware, and the 3 caplog tests. "Never use structlog.testing.capture_logs, capsys or root.handlers =."
+  - TASK: the §6.f final recipe, spelled out in the prompt (processors, the marked handler, uvicorn and httpx loggers), the middleware (the 500 path still sets the header and logs `http.request`), and the 3 caplog tests, `test_unhandled_error_json` asserting the two correlated lines. "Never use structlog.testing.capture_logs, capsys or root.handlers =."
   - DONE WHEN: `uv run pytest -q tests/test_logging.py` → `3 passed`.
 - **Verify 5:**
   - `uv run pytest -q tests/test_logging.py` → `3 passed`.
@@ -1785,9 +1945,9 @@ Steps:
   - Logs go to stderr and CLI results to stdout.
 - **Checkpoint 5:** `phase 5: structured logging with request ids [AI: P5.1 S; human: log review]`.
 
-**Phase 6 — Geospatial analysis (103–153 min).**
+**Phase 6 — Geospatial analysis (100–153 min).**
 - **Goal:** a verified geodesy core; results persisted idempotently through migration 0002 and exposed by the API.
-- **Model:** mixed (P6.2 and P6.3 small, the rest large).
+- **Model:** mixed (P6.3 small, the rest large).
 - **Done when:**
   - the geodesy tests are green and the test file was never edited after P6.1;
   - 0002 is reviewed;
@@ -1803,39 +1963,38 @@ Steps:
   - CHANGE ONLY: `src/gisdb/geodesy.py`, `tests/test_geodesy.py`.
   - TASK: "Write the tests FIRST, exactly from the table, then the implementation", then the §6.g spec block and the T1–T11 block, verbatim. Standard library only; the do-not-edit rule.
   - DONE WHEN: `uv run pytest -q tests/test_geodesy.py` all passed (≥ 11) and `uv run ruff check src tests` is clean.
-- **Prompt 6.2 — Oracle and property tests (small).**
+- **Prompt 6.2 — Oracle and property tests (large).** A fresh large-model chat; P6.3 then gets a fresh small-model chat.
   - READ: the public function signatures of `src/gisdb/geodesy.py`.
   - CHANGE ONLY: `tests/test_geodesy_oracle.py`.
-  - TASK: the §6.g P6b block, verbatim.
+  - TASK: the §6.g P6b block, verbatim (with its two pinned choices).
   - DONE WHEN: `7 passed` in < 20 s.
 - **Prompt 6.3 — Analysis result models (small).**
   - READ: PLAN.md §4, `src/gisdb/models.py`.
   - CHANGE ONLY: `src/gisdb/models.py`.
-  - TASK: add `AnalysisRun`, `TrajectoryMetrics`, `ZonePass` and `TrajectoryIntersection` exactly as the §6.c 0002 table, copying the 0001 style (including the explicit unique name). "Do NOT create a migration; stop and tell me to run autogenerate."
+  - TASK: add `AnalysisRun`, `TrajectoryMetrics`, `ZonePass` and `TrajectoryIntersection` exactly as the §6.c 0002 table, copying the 0001 style (including the explicit unique name); the DELTA item for PLAN §4 (an extra analysis's table, Appendix E.5, is added to this list before sending). "Do NOT create a migration; stop and tell me to run autogenerate."
   - DONE WHEN: `uv run python -c "import gisdb.models"` exits 0.
   - Then `gate lint` only: until 0002 exists, the `db` fixture fails on the missing tables. No AI_LOG row or commit yet.
 - **Human step 6.a:**
   - Run `uv run alembic revision --autogenerate -m "analysis results" --rev-id 0002`, then the same `ruff format` / `ruff check --fix` line on `migrations/versions`.
-  - Go through checklist 1–8, add the `Reviewed:` line, and run `uv run alembic upgrade head && uv run alembic check`.
-  - Then run the full `gate` (all passed, ≥ 56: Phase 5's 38 plus P6.1 and P6.2), append P6.3's AI_LOG row, and commit `P6.3: analysis result models; 0002 reviewed [AI: small]`.
+  - Go through checklist 1–8 (counts labelled practice), add the `Reviewed:` line as docstring line 3 (`sed -i '2a …'`, §6.c), and run `uv run alembic upgrade head && uv run alembic check`.
+  - Then run the full `gate` (all passed, ≥ 56: Phase 5's 38 plus P6.1 and P6.2), then `ailog P6.3 small …` and commit `P6.3: analysis result models; 0002 reviewed [AI: small]`.
 - **Prompt 6.4 — Analysis runner, CLI, tests (large).**
   - READ: PLAN.md §1, §7, §8, the `geodesy.py` signatures, `models.py`, `db.py`, `cli.py`, `tests/conftest.py`.
   - CHANGE ONLY: `src/gisdb/analysis.py`, `src/gisdb/cli.py`, `tests/test_analysis.py`.
-  - TASK: the §6.g runner (with `<EARTH_RADIUS_KM=6371.0088>`, `<TOL_KM=0.001>`), `analyze` CLI, the 4 tests of §6.h.
+  - TASK: the §6.g runner (with `<EARTH_RADIUS_KM=6371.0088>`, `<TOL_KM=0.001>`), `analyze` CLI, the 4 tests of §6.h; the DELTA item for PLAN §7 and §8. Geodesy is imported as a module (`from gisdb import geodesy`, then `geodesy.circle_passes` and so on), because `gisdb.models.ZonePass` and `geodesy.ZonePass` share a name. An extra analysis (Appendix E.5) is sent as its own prompt after P6.4 and before P6.5.
   - DONE WHEN: `uv run pytest -q tests/test_analysis.py` → `4 passed`.
 - **Prompt 6.5 — Analysis in the API (large).**
   - READ: PLAN.md §6, §8, `src/gisdb/api/schemas.py`, `routes.py`, `models.py`, the `run_analysis` signature in `src/gisdb/analysis.py`, `tests/conftest.py`.
   - CHANGE ONLY: `src/gisdb/api/routes.py`, `src/gisdb/api/schemas.py`, `tests/test_api.py`.
-  - TASK: fill the analysis fields per §6.e (page-level loading, list order, perspective flip, zone aggregates, `stale`); the 3 P6.5 tests with their own seeds (§6.h).
+  - TASK: fill the analysis fields per §6.e (page-level loading, list order, perspective flip, zone aggregates, `stale`); the 3 P6.5 tests with their own seeds (§6.h); the DELTA item for PLAN §6 and §8 (for example output units at the API edge, Appendix E.2).
   - DONE WHEN: `uv run pytest -q` all passed.
-- **Verify 6:**
-  - `uv run pytest -q tests/test_geodesy.py tests/test_geodesy_oracle.py` → all passed in < 20 s.
+- **Verify 6** (no suite run of its own: the P6.5 gate tail, ≥ 63 passed, is the suite evidence, and P6.2's DONE WHEN timed the oracle):
   - `git log --oneline -- tests/test_geodesy.py | wc -l` → `1`.
   - `uv run alembic current` → `0002 (head)`.
   - `grep -c "Reviewed:" migrations/versions/0002_analysis_results.py` → `1`.
   - `uv run gisdb analyze 2>/dev/null` twice → the §7.6 counts both times (`trajectories` 10, `zones` 10, `zone_passes` 14, `intersections` 9), with `analysis_run_id` rising by 1. It is 1 then 2 only if nobody ran `analyze` on the dev DB before; an executor may have, and Verify 6 does not reset.
   - api_get after analysis (§7.6 rows): `"/trajectories/$SAMPLE_TRJ"` → `"distance_inside_km":91.4662…`; ZN-BAFFIN `"pass_count":0`; FLT-1008 contains `"kind":"touch"`; FLT-1009 contains `"time_gap_s":30.0`.
-  - `uv run pytest -q` → ≥ 63 passed.
+  - A practice length and the pass times (brief requirement 5): `uv run python scripts/api_get.py "/trajectories/$SAMPLE_TRJ" 2>/dev/null | grep -oE '"length_km":[0-9.]+|"time":"[^"]+"' | paste -sd' '` → `"length_km":5424.514271… "time":"2024-05-01T13:26:53.336…Z" "time":"2024-05-01T13:33:20.722…Z"` (sorted keys put `analysis` before `zone_passes`; the intersection keys `time_self` and `time_other` do not match).
 - **If it fails** (one per prompt; the playbook's block contains the P6.1 one, and the others go under it as plain text):
   - P6.1 (geo verbatim): "T2/T6/T7/T10 fail. Do not touch the tests. The implementation must not interpolate or difference raw lat/lon anywhere: use interpolate(a, b, f) = a*cos(f*theta) + u*sin(f*theta) with u = unit(a x b) x a, and convert to lat/lon only for output. In segment_intersections test BOTH candidates x and -x, and require on_arc on BOTH arcs. Show the diff of geodesy.py only."
   - P6.2: "Use the skip rule exactly: for each segment compute the min of the SIGNED sampled g (not min |g|) and skip the case if it lies in (-1 km, +1 km). Keep 1 km steps, segments of 20-600 km and N_ORACLE = 100. Do not change src/."
@@ -1846,9 +2005,9 @@ Steps:
   - Pruning uses bounding caps, not lat/lon boxes: boxes break at ±180°, at the poles and on poleward bulges.
   - 0002 is create-only schema evolution.
   - Provenance per run, and an idempotent full recompute. The incremental path goes through `stale`.
-- **Checkpoint 6:** `phase 6: geodesy, persisted analysis, API exposure [AI: P6.1 L, P6.2 S, P6.3 S, P6.4 L, P6.5 L; human: expected values, 0002 review]`.
+- **Checkpoint 6:** `phase 6: geodesy, persisted analysis, API exposure [AI: P6.1 L, P6.2 L, P6.3 S, P6.4 L, P6.5 L; human: expected values, 0002 review]`.
 
-**Phase 7 — Tests and verification (153–170 min).**
+**Phase 7 — Tests and verification (153–172 min).**
 - **Goal:** a one-command proof from an empty schema, invariants that work on real data, and short docs.
 - **Model:** small.
 - **Done when:** `bash scripts/verify.sh` ends `VERIFY OK`, and README.md and NOTES.md are committed.
@@ -1862,20 +2021,25 @@ Steps:
 - **Prompt 7.2 — Smoke and verify scripts (small).**
   - READ: PLAN.md §9, `scripts/api_get.py`, `src/gisdb/cli.py`.
   - CHANGE ONLY: `scripts/smoke.py`, `scripts/verify.sh`.
-  - TASK: the §6.i contracts, verbatim. The `verify.sh` header line carries `<DATA_DIR=data>` as written in §6.i, and its steps go in as a numbered command list (§9.1 rule 7).
-  - DONE WHEN: `bash scripts/verify.sh` → last line `VERIFY OK`.
-  - The human's check of that line is the run P7.3 reuses: `bash scripts/verify.sh 2>/dev/null | tail -n 15 | tee /tmp/verify_tail.txt` (about 60 s, run once instead of twice).
+  - TASK: the §6.i contracts, verbatim. The `verify.sh` header line carries `<DATA_DIR=data>` as written in §6.i, "written with the token's value (no angle brackets in the file)", and its steps go in as a numbered command list (§9.1 rule 7), with "Separate commands with ';', never '&&': under set -e a failure before '&&' does not stop the script."
+  - DONE WHEN: `bash -n scripts/verify.sh` exits 0 and `uv run python scripts/smoke.py` → `SMOKE OK (8 checks)`. "Do not run verify.sh yourself: it takes about a minute and resets the dev database; I run it next."
+- **Human step 7.a — one `verify.sh` run, saved for P7.3 and Verify 7:**
+  - `timeout 300 bash scripts/verify.sh 2>/dev/null | tail -n 20 | tee /tmp/verify_tail.txt` → ends `VERIFY OK` (about 60 s; the only run in Phase 7). Twenty lines (the first draft kept 15) leave room for a few lines of pytest warnings, so `no-op OK` stays in the saved tail.
+  - `uv run gisdb ingest "$DATA_DIR" 2>&1 >/dev/null | grep -oE '"reason_code": "[a-z_]+"' | sort | uniq -c` → practice: 1 `invalid_timestamp`, 1 `missing_field`, 2 `out_of_range`, 1 `too_few_points` (the data-quality counts for NOTES; this re-ingest is a no-op on data).
 - **Prompt 7.3 — README and NOTES (small).**
-  - READ: `PLAN.md`, `AI_LOG.md`, `pyproject.toml`, and the pasted `/tmp/verify_tail.txt` saved after P7.2.
+  - READ: `PLAN.md`, `AI_LOG.md`, `pyproject.toml`, and the pasted `/tmp/verify_tail.txt` and reason-code counts saved in Human step 7.a.
   - CHANGE ONLY: `README.md`, `NOTES.md`.
-  - TASK: §6.j; "use only facts from these inputs"; write ids literally (`<SAMPLE_TRJ=FLT-1003>`), never shell variables.
-  - DONE WHEN: `wc -l README.md NOTES.md` → ≤ 120 and ≤ 80.
+  - TASK: §6.j, including the README's assumption bullets and its `## AI usage` section; "use only facts from these inputs"; "replace every <NAME=value> token below by its value; the files contain no angle-bracket tokens"; write ids literally (`<SAMPLE_TRJ=FLT-1003>`), never shell variables.
+  - DONE WHEN: `wc -l README.md NOTES.md` → ≤ 120 and ≤ 80, and `grep -c '^## AI usage' README.md` → `1`.
+  - Then the 2-minute claim check: every README claim against the code and the saved tail.
 - **Prompt 7.4 — Review, optional (large; unscheduled, only on time saved earlier).**
   - READ: `src/gisdb/ingest.py`, `analysis.py`, `geodesy.py`, `api/routes.py`, `migrations/versions/*`.
   - CHANGE ONLY: nothing.
   - TASK: "List at most 8 concrete defects ranked by severity, each with file:line and a failing input; do not edit files." The candidate fixes 1–3 of them by hand or with a targeted prompt.
 - **Verify 7:**
-  - `bash scripts/verify.sh 2>/dev/null | grep -E 'no-op OK|INVARIANTS OK|SMOKE OK|passed|VERIFY OK'` → `no-op OK …`, `INVARIANTS OK (…)`, `SMOKE OK (8 checks)`, `… passed`, `VERIFY OK`.
+  - `grep -E 'no-op OK|INVARIANTS OK|SMOKE OK|passed|VERIFY OK' /tmp/verify_tail.txt` → `no-op OK …`, `INVARIANTS OK (…)`, `SMOKE OK (8 checks)`, `… passed`, `VERIFY OK`, plus `All checks passed!` when the 20-line tail reaches the lint step (P7.3 changed only README.md and NOTES.md, which ruff excludes and no test reads, so the saved run still holds).
+  - `grep -c '^## AI usage' README.md` → `1` (brief requirement 7).
+  - `grep -rnE '<[A-Z][A-Z_]+=' README.md NOTES.md src tests scripts || echo "no placeholders"` → `no placeholders`.
   - `wc -l README.md NOTES.md` → limits as above.
   - `git status --short` → empty after the checkpoint.
 - **If it fails:** "verify.sh fails in smoke. Start the server with sys.executable -m gisdb.cli serve, poll /health every 0.25 s for at most 20 s, and always terminate (then kill) it in finally. Change scripts/smoke.py only."
@@ -1889,18 +2053,18 @@ Steps:
 
 | Appendix | Must contain |
 |---|---|
-| A. Reference architecture | Condensed §6.a tree; a data-flow diagram (mermaid allowed): JSON → records → ingest → DB → analysis → DB → API; the table list with keys (§6.c); the endpoint table (§6.e); the event list (§6.f); the commands (§2.1 entry points) |
-| B. Great-circle cheat sheet | Formulas: n-vector, distance `atan2(\|a×b\|, a·b)`, clamped haversine, slerp, cross-track `asin(n̂·c)`, initial bearing; arc × circle closed form `p(t)·c = M cos(t−τ)`, `cos ρ = cos xt · cos δ`, entry τ−δ / exit τ+δ, ±1 m touch band; arc × arc ±x on BOTH arcs, co-linearity by distance, caps. Pseudo-code is a pointer to the P6.1 spec. **Sanity values** (R = 6371.0088 km): 1° of a great circle (latitude, or longitude at the equator) = 111.195080 km; 1 arc-minute 1.853251 km; equator→pole 10,007.557221; antipodal 20,015.114442; (60,0)→(60,1) 55.597011 (55.597540 along the parallel); (52,179)→(52,−179) 136.912738 (naive 24,508); (85,0)→(85,180) 1,111.950802; (50,−50)→(50,50) 6,560.222 with midpoint (61.659226, 0) vs equirectangular 7,147.482; LHR→JFK 5,540.019 sphere vs 5,554.909 WGS84; sphere error ≤ 0.561%; the chord-by-depth table for r = 50 km (1 mm 20.0 m, 1 cm 63.2 m, 1 m 632.5 m, 5 m 1,414.2 m). **Pitfalls:** `acos(a·b)`, unclamped haversine, degrees vs radians, `atan2` argument order, lat/lon lerp, ECEF chord, raw longitude comparison at ±180, one-sided arc test, plane-angle co-linearity, tangency noise, lat/lon boxes, hypothesis degeneracies. **Variations table** (closest approach, first time within X km, cylinders, polygons, conflicts, WGS84, NM output) from geo.md §5.8 |
-| C. PostGIS contingency | When to switch (brief asks for spatial SQL; PostGIS present; polygons; large data). Availability query `SELECT name, default_version, installed_version FROM pg_available_extensions WHERE name = 'postgis';`. Setup: `uv add geoalchemy2`; Alembic `include_object`/`writer`/`render_item` from `geoalchemy2.alembic_helpers`; `CREATE EXTENSION IF NOT EXISTS postgis` needs superuser. `geography(Point, 4326)` columns derived from the floats in a migration (`ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography`, lon first) with GiST indexes. Function table: `ST_Distance(g1, g2, false)` sphere; `ST_Length`; `ST_DWithin` prefilter; `ST_Intersects`; `ST_Intersection` and `ST_Buffer` go through a planar projection, so exact events stay in Python; `ST_Segmentize`. Day-of check `SELECT ST_Distance('POINT(0 0)'::geography, 'POINT(1 0)'::geography, false)` ≈ 111195.08 m (sphere) vs 111319.49 m (spheroid, default). Marked "not verified locally (no PostGIS here)". One interview line |
-| D. No-Postgres fallback (SQLite) | Decision at minutes 10/27: Postgres reachable → use it. Binaries but no server → `initdb`/`pg_ctl`, 5-minute cap. Otherwise SQLite. The `.env` lines (§6.b). Why nothing else changes: `UTCDateTime`, `CURRENT_TIMESTAMP`, FK pragma, `check_same_thread`, `render_as_batch`, JSON variant; the same 0001 verified on both. Never `create_all`. `pgserver` only if the brief requires Postgres features (≤ 5 min, ext4 only, no PostGIS). Delete `*.sqlite3` to reset. Test database missing (Human step 0.a prints `NO TEST DB`) while the server works: `PGPASSWORD=gis createdb -h localhost -U gis gis_test` (the brief's user and name on the day); if that is refused, SQLite for both URLs. The test URL's database name must contain `test` (conftest refuses otherwise) |
-| E. Adapting to the real brief | Checklist: read the brief; profile; landmark; map the brief's entities onto trajectories/zones (a third entity → a PLAN §4 DELTA table); units and time forms; are natural keys stable? (if not, keep the surrogate and pick a composite natural key); extra analysis → a PLAN §8 DELTA line plus one extra prompt modelled on P6.4 (polygons, cylinders, closest approach: see B, C); data size → caps + time windows; update the placeholder values and §3.3 shell variables. If PLAN §8's `TOL_KM` exceeds 0.004 km (coordinates coarser than about 5 decimals), shift T5's two off-tangent radii to 111.195080 ∓ 2·`TOL_KM` before sending P6.1 and assert only their pass counts and kinds: the 2.109063 value holds only for the 5 m case, and ±5 m would fall inside the touch band. Up to 7 candidate questions for the interviewer (PLAN §10 keeps the top 5): sphere or WGS84 and which radius; touch and overlap semantics; the duplicate/conflict policy; whether altitude matters; expected scale; PostGIS availability or requirement; anything beyond read-only |
-| F. Prompting patterns and token economy | The contract, kickoff header, the gate (with `gate lint`), calibration, escalation ladder (with P5.1's first-failure exception), fresh chat per phase, tails ≤ 20 lines, terse replies, the 300k-token / 15-tool-call tripwire. Recovery library R1–R9, one line each: R1 hallucinated API; R2 file drift (restore, redo within CHANGE ONLY); R3 async creep; R4 scope creep; R5 test tampering (restore tests, fix the code); R6 loop ("stop; summarize in 5 lines; propose one fix"); R7 context reset (new chat + kickoff + PLAN §11); R8 SQLite issues; R9 small-model geometry → large immediately |
-| G. Final 5-minute demo | 0:00 architecture in one sentence; 0:30 `bash scripts/verify.sh` (or its last output); 1:30 PLAN §3/§8 decisions; 2:15 `api_get.py "/trajectories/$SAMPLE_TRJ"`: the Pituffik pass inside the reporting gap, and the ghost zone absent, i.e. great circle vs planar; 3:15 the analytic table written first, plus the oracle; 4:00 `AI_LOG.md` and commit tags (what went small vs large, one escalation); 4:30 limitations and next steps (PostGIS prefilter, incremental analysis, WGS84 option) |
+| A. Reference architecture | Condensed §6.a tree; a data-flow diagram (mermaid allowed): JSON → records → ingest → DB → analysis → DB → API; then a summary of at most 10 lines: the tables with their keys, the endpoints, the event names and the commands, each pointing to the prompt or section that specifies it in full (P2.1 and P6.3, P4.1, P0.2's Logging line, PLAN §9) instead of restating it (the first draft's A.3–A.6 restated about 8 KB) |
+| B. Great-circle cheat sheet | Formulas: n-vector, distance `atan2(\|a×b\|, a·b)`, clamped haversine, slerp, cross-track `asin(n̂·c)`, initial bearing; arc × circle closed form `p(t)·c = M cos(t−τ)`, `cos ρ = cos xt · cos δ`, entry τ−δ / exit τ+δ, ±1 m touch band; arc × arc ±x on BOTH arcs, co-linearity by distance, caps. Pseudo-code is a pointer to the P6.1 spec. **Sanity values** (R = 6371.0088 km): 1° of a great circle (latitude, or longitude at the equator) = 111.195080 km; 1 arc-minute 1.853251 km; equator→pole 10,007.557221; antipodal 20,015.114442; (60,0)→(60,1) 55.597011 (55.597540 along the parallel); (52,179)→(52,−179) 136.912738 (naive 24,508); (85,0)→(85,180) 1,111.950802; (50,−50)→(50,50) 6,560.222 with midpoint (61.659226, 0) vs equirectangular 7,147.482; LHR→JFK 5,540.019 sphere vs 5,554.909 WGS84; sphere error ≤ 0.561%; the chord-by-depth table for r = 50 km (1 mm 20.0 m, 1 cm 63.2 m, 1 m 632.5 m, 5 m 1,414.2 m). **Pitfalls:** `acos(a·b)`, unclamped haversine, degrees vs radians, `atan2` argument order, lat/lon lerp, ECEF chord, raw longitude comparison at ±180, one-sided arc test, plane-angle co-linearity, tangency noise, lat/lon boxes, hypothesis degeneracies. **Variations table** (closest approach, first time within X km, cylinders, polygons, conflicts, WGS84, NM output) from geo.md §5.8; its closest-approach row points to Appendix E.5's ready block |
+| C. PostGIS contingency | When to switch (brief asks for spatial SQL; PostGIS present; polygons; large data). Availability query `SELECT name, default_version, installed_version FROM pg_available_extensions WHERE name = 'postgis';`. Setup: `uv add geoalchemy2`; Alembic `include_object`/`writer`/`render_item` from `geoalchemy2.alembic_helpers`; `CREATE EXTENSION IF NOT EXISTS postgis` needs superuser. `geography(Point, 4326)` columns derived from the floats in a migration (`ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography`, lon first) with GiST indexes. Function table: `ST_Distance(g1, g2, false)` sphere; `ST_Length`; `ST_DWithin` prefilter; `ST_Intersects`; `ST_Intersection` and `ST_Buffer` go through a planar projection, so exact events stay in Python; `ST_Segmentize`. Day-of check `SELECT ST_Distance('POINT(0 0)'::geography, 'POINT(1 0)'::geography, false)` ≈ 111195.08 m (sphere) vs 111319.49 m (spheroid, default). Marked "not verified locally (no PostGIS here)". Commands use the `PG*` variables of Human step 0.a, not literal credentials. One interview line |
+| D. No-Postgres fallback (SQLite) | Decision at minutes 10/27: Postgres reachable → use it. Server up but a database missing (Human step 0.a prints `NO PSQL ACCESS` with a "database … does not exist" error, or `NO TEST DB`): `createdb "$PGDATABASE"` or `createdb "$TEST_DB"` with the `PG*` variables of Human step 0.a (the brief's user and names), then rerun the check; SQLite only if createdb is refused. Binaries but no server → `initdb`/`pg_ctl`, 5-minute cap. Otherwise SQLite. The `.env` lines (§6.b). Why nothing else changes: `UTCDateTime`, `CURRENT_TIMESTAMP`, FK pragma, `check_same_thread`, `render_as_batch`, JSON variant; the same 0001 verified on both. Never `create_all`. `pgserver` only if the brief requires Postgres features (≤ 5 min, ext4 only, no PostGIS). Delete `*.sqlite3` to reset. The test URL's database name must contain `test` (conftest refuses otherwise) |
+| E. Adapting to the real brief | **E.0 Placeholders and PLAN.md** (moved from the top section): the §3.1 table, the §3.2 skeleton and the DELTA rule. **E.1 Checklist:** read the brief; profile; landmark (if one index goes beyond ±90 it is the longitude, otherwise the landmark decides); map the brief's entities onto trajectories/zones (a third entity → a PLAN §4 DELTA table); units and time forms; are natural keys stable? (if not, keep the surrogate and pick a composite natural key); extra analysis → a PLAN §8 DELTA line plus one extra prompt (E.5); data size → caps + time windows; mark as last resort every cut and tripwire skip that removes an R-numbered requirement of PLAN §2 (§4.3), record them in PLAN §10 and recount the minutes; update the placeholder values and §3.3 shell variables. Then a **day-of edit windows** table: during P1.1 (19–27) P2.1 and P3.1 per PLAN §3–§5; during P2.1 (31–40) P3.2, P4.1 and P4.2 (types, mandated paths); during P3.1/P3.2 (48–70) the Phase 6 prompts (E.4 radius and `TOL_KM`, E.5 extra analysis); during P4.1 (73–82) P7.2 and P7.3 (paths). Rule: never send a prompt before its day-of edits are done. **E.2** the mapping table, plus an explicit replace list for mandated paths: before sending P4.1, replace `/trajectories` → the mandated path and `trajectory '` → `<entity> '` in P4.1, P4.2, P6.5, P7.2 and P7.3, and edit the paths in the Verify lines and Appendix G; output units: store km, add `<field>_nm` or `<field>_m` at the API edge (B.7) through P6.5's DELTA item. **E.3** units, time forms and precision, plus drop-in FORMAT CASES for P3.1: named fields `{"lat": 51.47, "lon": -0.4543}` (or `latitude`/`longitude`) → lat 51.47, lon −0.4543; altitude in metres, 120 → `alt_m` 120.0; no altitude → every `alt_m` None; epoch milliseconds `1714543200000` → 2024-05-01T06:00:00Z; naive ISO that the brief calls UTC, `"2024-05-01T09:07"` → 2024-05-01T09:07:00Z (drop the naive-ts rejection case); radius in metres with no unit field, 5000 → `radius_km` 5.0 and −5 → `out_of_range` (drop the `"mi"` case). `TOL_KM` caveat: it must stay well below the domain's smallest meaningful separation (zone radii, conflict thresholds); at 4-decimal data (`TOL_KM` 0.0111) two tracks 10 m apart in parallel come out as an overlap, so ask the interviewer before raising it. If PLAN §8's `TOL_KM` exceeds 0.004 km, shift T5's two off-tangent radii to 111.195080 ∓ 2·`TOL_KM` before sending P6.1 and assert only their pass counts and kinds: the 2.109063 value holds only for the 5 m case, and ±5 m would fall inside the touch band. **E.4** Earth model: ask first; a ready drop-in for R = 6371.0 (recomputed 2026-10-08 with E.4's formulas): T1 111.194927, 55.596934, 136.912549, 1111.949266, 20015.086796; T3 6560.212507 and 111.730598; T4 ∓0.449661, entry 12:05:30.204 (330.203518 s); T5 radii 111.194927 / 111.189927 / 111.199927, inside 2.109186; T6 136.043256; T7 unchanged (59.992612); T8 89.100678; T9 45.655925, duration 2339.593; the P6.4/P6.5 length 222.389853; P6.2's oracle `Geodesic(6371000.0, 0.0)`. For any other radius, ask the large model in a fresh chat, logged in AI_LOG ("With Python's math module, compute and print for R = [the brief's radius] km: [the 17 formulas, one per line]"), and check its code at 6371.0088 against the listed outputs first; no pasted program (§9.1 rule 7). **E.5** extra analysis, with a ready block for closest approach (time-synchronised): `closest_approach(a_points, b_points) -> CPA \| None`; window [t0, t1] = [max(starts), min(ends)], None if t0 > t1; breakpoints t0, t1 and every report time of either track inside the window; on each sub-interval each track flies one segment: position = interpolate(segment, f) with f the time fraction, altitude linear (None if an end is None); d(t) = hypot(R·angle(pA, pB), (hA − hB)/1000 when both altitudes exist, else 0); minimise d per sub-interval by golden-section search (60 steps) and also evaluate both ends; keep the smallest, values within 1e-9 km count as ties and ties go to the earliest t; return t, `distance_3d_km`, `distance_h_km`, `vertical_m` and both positions; conflict = `distance_h_km` and `vertical_m` below the brief's thresholds (drones example: 0.050 km and 15 m). Test values (A = (0, −0.01) → (0, 0.01) at 12:00–12:10, altitude 100 m; checked by hand and by an independent minimiser): C1 B (−0.01, 0) → (0.01, 0), same times → 0 at 12:05:00; C2 the same B 30 s later → 0.078627 km at 12:05:15 (v·√(15² + 15²)); C3 B parallel 0.0005° north → 0.055598 km at 12:00:00 (a tie; the earliest wins); C4 B at 12:20–12:30 → no row; C5 C1 at 130 m → 0.030000 km at 12:05:00. Placement: a `trajectory_approaches` table joins P6.3's list before it is sent (its DONE WHEN then lists 10 tables; Human step 6.a expects one more table); the prompt (the next free Phase 6 number: P6.6, or P6.7 when the PostGIS prompt took P6.6) goes after P6.4 and before P6.5, and P6.5 serves its field; it is paid with cuts 1, 4 and 5 (about 12 minutes), chosen in Verify 0's review. **E.6** data size. **E.7** up to 7 candidate questions for the interviewer (PLAN §10 keeps the top 5), after a row 0 asked at minute 1–6: "I prepared prompt templates and a checklist, no code; may I use them?" (default: yes; otherwise type the prompts from the PLAN sections); then: sphere or WGS84 and which radius; touch and overlap semantics; the duplicate/conflict policy; whether altitude matters; expected scale; PostGIS availability or requirement; anything beyond read-only. **E.8 Source shapes beyond one file per entity:** (1) a map keyed by id (`{"<id>": [...]}` or `{"tracks": {"<id>": [...]}}`): `load_records` turns each entry into a record dict `{<key field>: key, <list field>: value}` and parses with `json.load(fh, object_pairs_hook=...)`, which keeps repeated keys, so an identical repeat counts as a duplicate and a different one as `duplicate_key_conflict` (P3.2's mini file then holds the duplicate as a repeated key, written as raw text); (2) attributes in a second file (a register such as `vessels.json`): either a third entity table (E.2) or attributes denormalized onto the trajectory before hashing, with the register loaded first, so a register change updates the trajectory (choose this when the brief serves the attributes on the trajectory); (3) order: when records reference another file's records, a PLAN §5 DELTA sets the file order (registers and zones first, trajectories last), which P3.2 applies through its DELTA item; (4) cross-file references (a track without a vessel): a ninth reason code `unknown_reference` in P2.1's `reason_code_valid` CHECK, in P3.1's `REASON_CODES` and as one `test_rejections` case. Verify 3's `entity = 'file'` query shows any data file that was not recognized |
+| F. Prompting patterns and token economy | Moved here from the top section: **AI-use habits the grader wants to see** and **Human-only steps** (§9.2). The patterns in brief (plan first and cite after; pattern, then copy; stop at the migration boundary; specs, not code; read-only review) without restating the top section's contract, gate, escalation or token rules (the first draft's F.1–F.4 are dropped). Recovery library R1–R9, one line each: R1 hallucinated API; R2 file drift (restore, redo within CHANGE ONLY); R3 async creep; R4 scope creep; R5 test tampering (restore tests, fix the code); R6 loop: 3 failed attempts at one command, or past the §5.3 tripwire (about 15 tool calls on the small model, 20 on the large) ("stop; summarize in 5 lines; propose one fix"); R7 context reset (new chat + kickoff + PLAN §11); R8 SQLite issues; R9 small-model geometry → large immediately |
+| G. Final 5-minute demo | Rehearsed once in the buffer (172–180). 0:00 architecture in one sentence; 0:30 the saved `verify.sh` tail of Human step 7.a (or a live run); 1:30 PLAN §3/§8 decisions; 2:15 `api_get.py "/trajectories/$SAMPLE_TRJ"`: practice, the Pituffik pass inside the reporting gap and the ghost zone absent, i.e. great circle vs planar (ZN-BAFFIN: a planar lat/lon interpolation passes about 0.1 km from its centre, the great circle 476 km); on the day, the pass with the longest gap between reports, or T2/T6 (midpoint (61.659226, 0) against the planar (50, 0)) as the great-circle proof; 3:15 the analytic table written first, plus the oracle; 4:00 `AI_LOG.md` and commit tags (what went small vs large, one escalation); 4:30 limitations and next steps (PostGIS prefilter, incremental analysis, WGS84 option) |
 
 ## 10. Practice-run notes for Step B
 
 **Roles:**
-- **Executor:** an agent standing in for CoderPad's AI. Small-model prompts run on **Haiku**, large-model prompts on **Sonnet**. Consecutive prompts for the same model share one executor, the way one chat would. Each phase starts a new executor, matching "fresh chat per phase", and its first message is the kickoff header (§5.4).
+- **Executor:** an agent standing in for CoderPad's AI. Small-model prompts run on **Haiku**, large-model prompts on **Sonnet** (P6.2 is a large-model prompt since the Step A revision). Consecutive prompts for the same model share one executor, the way one chat would. Each phase starts a new executor, matching "fresh chat per phase", and its first message is the kickoff header (§5.4).
 - **Verifier** (default model): plays the candidate. It performs every human step, runs the gate and the Verify block, appends the AI_LOG.md rows, and commits.
 
 **Isolation: Step B runs in a dedicated clone.** The main repo holds `docs/` (the playbook), `practice/` (this record, the generator and the answer key), `temp/` and `HANDOFF.md`. Executors are agents with file tools, so a "must not see" list needs a mechanism; one `ls` would void the claim that the prompts alone built the service. The verifier sets the clone up once, outside the main repo (for example in the session's scratchpad directory):
@@ -1932,7 +2096,7 @@ How the work flows:
 **Verifier duties, per phase:**
 1. Extract the phase's human steps, prompts with their practice values, Verify block, "If it fails" prompt and checkpoint from `docs/PLAYBOOK.md` in the main repo. Start from the clone's current `development` head.
 2. Run the human steps exactly as written, in the clone.
-3. Send each prompt to the executor of the right model, preceded by the kickoff header when a new executor starts.
+3. Send each prompt to the executor of the right model, with its practice values filled in (replace each `<([A-Z][A-Z0-9_]*)=([^>]*)>` match by its value, except the literal `<NAME=value>`, which names the syntax in P7.3's TASK; no value contains `<` or `>`, §3.1), preceded by the kickoff header in the same message when a new executor starts.
 4. After each prompt, run the gate (§5.4; `gate lint` after P2.1 and P6.3) and check the CHANGE ONLY scope. Restore stray changes and record them as a prompt issue.
 5. Run the Verify commands **as written**:
    - never start a server outside `scripts/smoke.py`;
@@ -1946,7 +2110,7 @@ How the work flows:
    - stage everything (`git add -A`), then send the phase's "If it fails" prompt with the failure tail (≤ 20 lines) to the same executor, then re-verify;
    - if it still fails, a senior agent makes the smallest direct fix, writes down what the prompt should have said, re-verifies, and records it as a prompt issue with a rewrite.
 8. **On PASS:**
-   - Make the per-prompt gate commits exactly as the playbook writes them: the AI_LOG.md row, then `git add -A && git commit -qm "P<N>.<k>: <what> [AI: small|large]"`.
+   - Make the per-prompt gate commits exactly as the playbook writes them: the prompt's "After" line, `ailog … && git add -A && git commit -qm "P<N>.<k>: <what> [AI: small|large]"`, with `T0`, `m` and `ailog` defined as in Session setup.
    - At the checkpoint, tick the phase in PLAN §11 and commit `practice: phase N — <title>`, with the playbook's checkpoint tag line in the body (for example `[AI: P3.1 L, P3.2 L; human: rerun proof]`). The tick keeps that commit non-empty.
    - Then fast-forward the main repo and push `development` (above).
    - This exercises the playbook's own commit flow. `git log` then carries the `[AI: …]` tags that NOTES.md cites, and Verify 6's `git log --oneline -- tests/test_geodesy.py | wc -l` → `1` holds.
